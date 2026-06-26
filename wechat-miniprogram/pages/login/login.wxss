@@ -1,52 +1,145 @@
 .login {
+  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 28rpx;
-  background: linear-gradient(135deg, #111827, #2563eb);
+  overflow: hidden;
+  padding: 42rpx 30rpx;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(96, 165, 250, 0.72), transparent 26%),
+    radial-gradient(circle at 82% 18%, rgba(168, 85, 247, 0.58), transparent 24%),
+    linear-gradient(145deg, #08111f 0%, #12316f 48%, #2563eb 100%);
+}
+
+.bg-orb {
+  position: absolute;
+  border-radius: 9999rpx;
+  filter: blur(10rpx);
+  opacity: 0.85;
+}
+
+.orb-a {
+  width: 360rpx;
+  height: 360rpx;
+  left: -130rpx;
+  top: 110rpx;
+  background: rgba(56, 189, 248, 0.28);
+}
+
+.orb-b {
+  width: 460rpx;
+  height: 460rpx;
+  right: -190rpx;
+  bottom: -90rpx;
+  background: rgba(124, 58, 237, 0.28);
+}
+
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.55) 1rpx, transparent 1rpx),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.55) 1rpx, transparent 1rpx);
+  background-size: 72rpx 72rpx;
 }
 
 .card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   margin: 0;
+  padding: 42rpx 34rpx 34rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.62);
+  border-radius: 34rpx;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 34rpx 88rpx rgba(8, 17, 31, 0.28);
+  backdrop-filter: blur(18rpx);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.logo {
+  width: 76rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  border-radius: 24rpx;
+  text-align: center;
+  color: #ffffff;
+  font-size: 38rpx;
+  font-weight: 900;
+  background: linear-gradient(145deg, #2563eb, #7c3aed);
+  box-shadow: 0 16rpx 36rpx rgba(37, 99, 235, 0.32);
 }
 
 .title {
-  font-size: 42rpx;
-  font-weight: 900;
+  color: #0f172a;
+  font-size: 39rpx;
+  line-height: 1.18;
+  font-weight: 950;
+  letter-spacing: -1rpx;
 }
 
 .sub {
   margin-top: 8rpx;
-  color: #6b7280;
+  color: #64748b;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.cloud-pill {
+  display: inline-flex;
+  margin-top: 28rpx;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  color: #1d4ed8;
+  font-size: 24rpx;
+  font-weight: 800;
+  background: #eff6ff;
 }
 
 .field {
-  margin-top: 22rpx;
+  margin-top: 28rpx;
 }
 
 .field text {
   display: block;
-  margin-bottom: 8rpx;
-  font-weight: 800;
+  margin-bottom: 10rpx;
+  color: #111827;
+  font-size: 26rpx;
+  font-weight: 900;
 }
 
 .field input {
-  height: 84rpx;
-  padding: 0 20rpx;
-  border: 1rpx solid #e5e7eb;
-  border-radius: 18rpx;
+  height: 88rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid #dbe4f0;
+  border-radius: 20rpx;
+  color: #111827;
   background: #ffffff;
+  font-size: 28rpx;
+  box-shadow: inset 0 2rpx 5rpx rgba(15, 23, 42, 0.03);
 }
 
 .login-btn {
-  margin-top: 28rpx;
+  margin-top: 34rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 22rpx;
+  font-size: 30rpx;
+  font-weight: 950;
+  box-shadow: 0 18rpx 38rpx rgba(37, 99, 235, 0.28);
 }
 
 .tip {
-  margin-top: 18rpx;
-  color: #6b7280;
-  font-size: 24rpx;
-  line-height: 1.5;
+  margin-top: 20rpx;
+  color: #64748b;
+  font-size: 23rpx;
+  line-height: 1.55;
+  text-align: center;
 }

@@ -553,13 +553,9 @@ def seed_json_path() -> Path | None:
     return None
 
 
-def seed_students(actor: str = "\u7cfb\u7edf\u5bfc\u5165") -> dict[str, Any]:
-    path = seed_json_path()
-    if path is None:
-        raise FileNotFoundError("student_import_data.json not found")
-
-    data = json.loads(path.read_text(encoding="utf-8"))
-    records = data.get("records", [])
+def import_student_records(records: list[dict[str, Any]], actor: str = "\u7cfb\u7edf\u5bfc\u5165", source: str = "upload") -> dict[str, Any]:
+    if not isinstance(records, list):
+        raise ValueError("records must be an array")
     inserted = 0
     updated = 0
     with DB_LOCK:
@@ -635,7 +631,17 @@ def seed_students(actor: str = "\u7cfb\u7edf\u5bfc\u5165") -> dict[str, Any]:
                     inserted += 1
                     audit(db, actor, "create imported student", "student", permanent_id, None, row)
             db.execute("COMMIT")
-    return {"inserted": inserted, "updated": updated, "total": len(records), "source": str(path)}
+    return {"inserted": inserted, "updated": updated, "total": len(records), "source": source}
+
+
+def seed_students(actor: str = "\u7cfb\u7edf\u5bfc\u5165") -> dict[str, Any]:
+    path = seed_json_path()
+    if path is None:
+        raise FileNotFoundError("student_import_data.json not found")
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    records = data.get("records", [])
+    return import_student_records(records, actor, str(path))
 
 
 def list_students(params: dict[str, list[str]]) -> list[dict[str, Any]]:
@@ -2127,6 +2133,10 @@ class AppHandler(BaseHTTPRequestHandler):
             if path == "/api/seed/import-students":
                 require_admin(user)
                 self.send_json({"ok": True, "result": seed_students(actor)})
+            elif path == "/api/admin/import-students":
+                require_admin(user)
+                records = payload.get("records") or []
+                self.send_json({"ok": True, "result": import_student_records(records, actor, "api-upload")})
             elif path == "/api/settings":
                 require_admin(user)
                 self.send_json({"ok": True, "settings": update_settings(payload, actor)})
