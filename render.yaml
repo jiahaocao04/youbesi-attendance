@@ -3,7 +3,7 @@ services:
     name: youbesi-attendance-api
     runtime: docker
     rootDir: jy-attendance-billing
-    plan: starter
+    plan: free
     healthCheckPath: /api/health
     envVars:
       - key: JY_HOST
@@ -14,7 +14,3 @@ services:
         value: /data/jy.db
       - key: JY_REPORTS_DIR
         value: /data/reports
-    disk:
-      name: youbesi-data
-      mountPath: /data
-      sizeGB: 1
