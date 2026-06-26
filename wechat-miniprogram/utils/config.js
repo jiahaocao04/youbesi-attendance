@@ -1,10 +1,9 @@
 // Cloud-ready runtime configuration.
+// Free trial cloud backend:
+//   https://youbesi-attendance.onrender.com
 //
-// For real multi-network use, set CLOUD_BASE_URL to the public HTTPS backend:
-//   const CLOUD_BASE_URL = "https://api.example.com";
-//
-// Keep it empty during local/LAN testing so the current preview flow still works.
-const CLOUD_BASE_URL = "";
+// For local testing, set CLOUD_BASE_URL back to "".
+const CLOUD_BASE_URL = "https://youbesi-attendance.onrender.com";
 const LOCAL_BASE_URL = "http://192.168.1.16:8766";
 
 function normalizeBaseUrl(value) {
@@ -20,5 +19,5 @@ module.exports = {
   DEFAULT_BASE_URL,
   HAS_CLOUD_BACKEND,
   ALLOW_SERVER_EDIT: !HAS_CLOUD_BACKEND,
-  SERVER_MODE_LABEL: HAS_CLOUD_BACKEND ? "云端正式版" : "本地测试版"
+  SERVER_MODE_LABEL: HAS_CLOUD_BACKEND ? "cloud" : "local"
 };
