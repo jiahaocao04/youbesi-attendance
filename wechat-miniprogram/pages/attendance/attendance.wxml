@@ -1,0 +1,58 @@
+<view class="page">
+  <view class="top panel">
+    <view class="row">
+      <picker mode="date" value="{{date}}" bindchange="onDateChange">
+        <view class="date">{{date}}</view>
+      </picker>
+      <button class="danger save" loading="{{saving}}" bindtap="saveAttendance">生成日报</button>
+      <text wx:if="{{autoSaveText}}" class="autosave">{{autoSaveText}}</text>
+    </view>
+    <view class="summary">
+      <text>A {{summary.a}}</text>
+      <text>P {{summary.p}}</text>
+      <text>全天 {{summary.fullDay}}</text>
+      <text>未到 {{summary.absent}}</text>
+    </view>
+    <view class="subtabs">
+      <view class="subtab {{viewMode === 'roster' ? 'active' : ''}}" bindtap="showRoster">点名册</view>
+      <view class="subtab {{viewMode === 'absent' ? 'active' : ''}}" bindtap="showAbsent">未到 {{summary.absent}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{viewMode === 'roster'}}" class="sheet panel">
+    <view class="header sheet-row">
+      <text>学生</text>
+      <text>事件</text>
+      <text>购物</text>
+      <text>考勤</text>
+    </view>
+    <view wx:for="{{records}}" wx:key="permanent_id" class="sheet-row line {{item.note ? 'has-event' : ''}}">
+      <view class="name">
+        <text class="name-text">{{item.seq_in_class}}. {{item.name}}</text>
+        <text class="code">{{item.grade}}-{{item.class_no}}</text>
+      </view>
+      <input class="mini-input event-input" style="width: {{item.eventWidth}}rpx;" value="{{item.note}}" data-index="{{index}}" bindinput="onEventInput" bindblur="onEventBlur" />
+      <view class="shopping {{item.shoppingOpen || item.shopping_item || item.shopping_amount ? 'open' : ''}}">
+        <button wx:if="{{!item.shoppingOpen && !item.shopping_item && !item.shopping_amount}}" class="blank" data-index="{{index}}" bindtap="openShopping"></button>
+        <view wx:else class="shopping-editor">
+          <input class="mini-input item" style="width: {{item.shoppingItemWidth}}rpx;" placeholder="物品" value="{{item.shopping_item}}" data-index="{{index}}" bindinput="onShoppingItem" bindblur="onShoppingBlur" />
+          <input class="mini-input amount" style="width: {{item.shoppingAmountWidth}}rpx;" placeholder="金额" type="digit" value="{{item.shopping_amount_text}}" data-index="{{index}}" bindinput="onShoppingAmount" bindblur="onShoppingBlur" />
+        </view>
+      </view>
+      <view class="ap">
+        <button class="ap-btn {{item.lunch_status === 'present' ? 'active' : ''}}" data-index="{{index}}" data-field="lunch_status" bindtap="toggleAP">A</button>
+        <button class="ap-btn {{item.care_status === 'present' ? 'active' : ''}}" data-index="{{index}}" data-field="care_status" bindtap="toggleAP">P</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="panel absent">
+    <view wx:if="{{!absentRecords.length}}" class="empty">今天没有未到提醒。</view>
+    <view wx:for="{{absentRecords}}" wx:key="permanent_id" class="absent-row">
+      <text>{{item.name}}</text>
+      <text>{{item.lunch_status === 'present' ? 'A到' : 'A未到'}}</text>
+      <text>{{item.care_status === 'present' ? 'P到' : 'P未到'}}</text>
+      <text class="muted">{{item.note}}</text>
+    </view>
+  </view>
+</view>

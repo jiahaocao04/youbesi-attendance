@@ -1,0 +1,52 @@
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx;
+  background: linear-gradient(135deg, #111827, #2563eb);
+}
+
+.card {
+  width: 100%;
+  margin: 0;
+}
+
+.title {
+  font-size: 42rpx;
+  font-weight: 900;
+}
+
+.sub {
+  margin-top: 8rpx;
+  color: #6b7280;
+}
+
+.field {
+  margin-top: 22rpx;
+}
+
+.field text {
+  display: block;
+  margin-bottom: 8rpx;
+  font-weight: 800;
+}
+
+.field input {
+  height: 84rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 18rpx;
+  background: #ffffff;
+}
+
+.login-btn {
+  margin-top: 28rpx;
+}
+
+.tip {
+  margin-top: 18rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+  line-height: 1.5;
+}

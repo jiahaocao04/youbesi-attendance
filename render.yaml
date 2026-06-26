@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: youbesi-attendance-api
+    runtime: docker
+    rootDir: jy-attendance-billing
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: JY_HOST
+        value: 0.0.0.0
+      - key: JY_DATA_DIR
+        value: /data
+      - key: JY_DB_PATH
+        value: /data/jy.db
+      - key: JY_REPORTS_DIR
+        value: /data/reports
+    disk:
+      name: youbesi-data
+      mountPath: /data
+      sizeGB: 1

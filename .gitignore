@@ -1,0 +1,11 @@
+jy-attendance-billing/data/
+优贝思报表归档/
+outputs/
+*.db
+*.sqlite
+*.sqlite3
+*.pdf
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

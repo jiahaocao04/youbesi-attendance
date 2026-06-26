@@ -1,0 +1,22 @@
+<view class="login">
+  <view class="panel card">
+    <view class="title">优贝思校外托管中心</view>
+    <view class="sub">老师端点名小程序</view>
+
+    <view class="field">
+      <text>服务器</text>
+      <input value="{{baseUrl}}" bindinput="onBaseUrl" placeholder="例如 http://192.168.1.23:8766" />
+    </view>
+    <view class="field">
+      <text>用户名</text>
+      <input value="{{username}}" bindinput="onUsername" placeholder="admin / 老师账号" />
+    </view>
+    <view class="field">
+      <text>PIN</text>
+      <input value="{{pin}}" bindinput="onPin" password type="number" placeholder="请输入 PIN" />
+    </view>
+
+    <button class="primary login-btn" loading="{{loading}}" bindtap="login">登录</button>
+    <view class="tip">免费内测时，开发者工具可用 127.0.0.1；真机预览请填电脑局域网地址。</view>
+  </view>
+</view>

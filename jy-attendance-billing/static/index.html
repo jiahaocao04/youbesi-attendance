@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>优贝思校外托管中心考勤收费系统</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <section id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <h1>优贝思校外托管中心</h1>
+      <p>请用用户名和 PIN 登录。</p>
+      <label>用户名 <input id="loginUsername" autocomplete="username" placeholder="例如：admin" /></label>
+      <label>PIN <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="例如：123456" /></label>
+      <button id="loginBtn" class="primary">登录</button>
+      <div class="hint">
+        初始管理员：用户名 <code>admin</code>，PIN <code>123456</code>。登录后请在“账户管理”里给老师创建独立账号。
+      </div>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <header class="topbar">
+      <div>
+        <h1>优贝思校外托管中心考勤收费系统</h1>
+        <p>老师只点考勤；管理员看名单、充值、月结和导出。</p>
+      </div>
+      <div class="user-box">
+        <div id="currentUser">未登录</div>
+        <button id="logoutBtn">退出</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button data-tab="home" data-admin-only="1" class="active">首页</button>
+      <button data-tab="students" data-admin-only="1">学生名单</button>
+      <button data-tab="attendance">手机点名</button>
+      <button data-tab="payments" data-admin-only="1">充值登记</button>
+      <button data-tab="settlement" data-admin-only="1">月底结算</button>
+      <button data-tab="export" data-admin-only="1">导出报表</button>
+      <button data-tab="costs" data-admin-only="1">成本记录</button>
+      <button data-tab="accounts" data-admin-only="1">账户管理</button>
+    </nav>
+
+    <main>
+      <section id="tab-home" class="panel active" data-admin-only="1">
+        <div class="toolbar">
+          <label>月份 <input type="month" id="homeMonth" /></label>
+          <button id="refreshDashboard">刷新概览</button>
+          <button id="seedImport" class="primary">导入现有学生名单</button>
+        </div>
+        <div id="networkInfo" class="notice"></div>
+        <div id="dashboardCards" class="cards"></div>
+        <div class="notice">
+          第一版只做最关键链路：学生导入 → 手机点名 → 充值登记 → 月底结算 → 导出 Excel。
+          请假、未到、未点名都不计费；只有“到”才计费。
+        </div>
+      </section>
+
+      <section id="tab-students" class="panel" data-admin-only="1">
+        <div class="toolbar">
+          <label>统计月份 <input type="month" id="studentMonth" /></label>
+          <input id="studentSearch" placeholder="搜索姓名 / 编号" />
+          <button id="loadStudents">查询</button>
+        </div>
+        <div class="table-wrap">
+          <table id="studentsTable"></table>
+        </div>
+      </section>
+
+      <section id="tab-attendance" class="panel">
+        <div class="toolbar sticky-tools">
+          <label>日期 <input type="date" id="attendanceDate" /></label>
+          <label>点名册 <select id="attendanceClass"></select></label>
+          <button id="saveAttendance" class="danger">保存</button>
+          <button id="generateDailyReport">日报PDF</button>
+        </div>
+        <div id="attendanceStatus" class="save-status">正在准备点名册</div>
+        <div id="attendanceSummary" class="summary-strip"></div>
+        <div class="attendance-subnav">
+          <button id="showAttendanceRoster" class="active">点名册</button>
+          <button id="showAbsentReminder" data-admin-only="1">未到提醒 <span id="absentCount">0</span></button>
+        </div>
+        <div class="hint compact-hint">
+          A=午餐，P=下午/晚托；A+P=全天；不勾=未出勤不收费。购物金额会进入该学生本月结算。
+        </div>
+        <div id="attendanceList" class="attendance-list"></div>
+        <div id="absentReminder" class="attendance-list hidden" data-admin-only="1"></div>
+      </section>
+
+      <section id="tab-payments" class="panel" data-admin-only="1">
+        <div class="form-grid">
+          <label>日期 <input type="date" id="paymentDate" /></label>
+          <label>学生 <select id="paymentStudent"></select></label>
+          <label>金额 <input type="number" step="0.01" id="paymentAmount" placeholder="充值填正数，退款填负数" /></label>
+          <label>方式
+            <select id="paymentMethod">
+              <option value="微信">微信</option>
+              <option value="支付宝">支付宝</option>
+              <option value="现金">现金</option>
+              <option value="其他">其他</option>
+            </select>
+          </label>
+          <label id="paymentMethodOtherWrap" class="hidden">其他方式 <input id="paymentMethodOther" placeholder="请输入支付方式" /></label>
+          <label class="wide">备注 <input id="paymentNote" placeholder="可选" /></label>
+          <button id="savePayment" class="primary">保存充值/退款</button>
+        </div>
+        <div class="toolbar">
+          <label>月份 <input type="month" id="paymentsMonth" /></label>
+          <button id="loadPayments">查看流水</button>
+        </div>
+        <div class="table-wrap">
+          <table id="paymentsTable"></table>
+        </div>
+      </section>
+
+      <section id="tab-settlement" class="panel" data-admin-only="1">
+        <div class="settings-card">
+          <h2>收费规则</h2>
+          <div class="form-grid compact">
+            <label>单独午餐/天 <input type="number" step="0.01" id="lunchRate" /></label>
+            <label>全天托管/天 <input type="number" step="0.01" id="fullDayRate" /></label>
+            <label>单独晚托/天 <input type="number" step="0.01" id="eveningOnlyRate" /></label>
+            <label>床位费/月 <input type="number" step="0.01" id="bedMonthlyFee" /></label>
+            <button id="saveSettings">保存规则</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label>结算月份 <input type="month" id="settlementMonth" /></label>
+          <button id="generateSettlement" class="danger">生成/重算月结</button>
+        </div>
+        <div id="settlementSummary" class="cards"></div>
+        <div class="table-wrap">
+          <table id="settlementTable"></table>
+        </div>
+      </section>
+
+      <section id="tab-export" class="panel" data-admin-only="1">
+        <div class="toolbar">
+          <label>月份 <input type="month" id="exportMonth" /></label>
+          <button id="exportMonthly" class="primary">导出月结 Excel</button>
+          <button id="exportMonthlyPdf">生成月报 PDF</button>
+        </div>
+        <p class="hint">
+          月结 Excel 包含：月度汇总、月度总表、欠费名单、学生缴费明细。
+        </p>
+        <div class="toolbar">
+          <label>单个学生 <select id="exportStudent"></select></label>
+          <button id="exportStudentBtn">导出该学生缴费明细</button>
+          <button id="exportStudentPdfBtn">生成该学生出勤PDF</button>
+        </div>
+        <div class="toolbar">
+          <label>日报日期 <input type="date" id="dailyReportDate" /></label>
+          <button id="exportDailyPdf">生成每日考勤PDF</button>
+        </div>
+        <p id="reportPathHint" class="hint"></p>
+      </section>
+
+      <section id="tab-costs" class="panel" data-admin-only="1">
+        <div class="settings-card">
+          <h2>成本记录</h2>
+          <div class="form-grid">
+            <label>日期 <input type="date" id="costDate" /></label>
+            <label>成本类型
+              <select id="costType">
+                <option value="fixed">固定成本</option>
+                <option value="variable">变动成本</option>
+                <option value="labor">人工成本</option>
+                <option value="other">其他成本</option>
+              </select>
+            </label>
+            <label>项目
+              <select id="costItem">
+                <option value="房租">房租</option>
+                <option value="水电">水电</option>
+                <option value="菜">菜</option>
+                <option value="肉">肉</option>
+                <option value="水果">水果</option>
+                <option value="牛奶">牛奶</option>
+                <option value="人工">人工</option>
+                <option value="其他">其他</option>
+              </select>
+            </label>
+            <label id="costItemOtherWrap" class="hidden">其他项目 <input id="costItemOther" placeholder="请输入成本项目" /></label>
+            <label>金额 <input type="number" step="0.01" id="costAmount" placeholder="例如 128.50" /></label>
+            <label class="wide">备注 <input id="costNote" placeholder="可选，例如：今日菜市场采购" /></label>
+            <button id="saveCost" class="primary">保存成本</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label>月份 <input type="month" id="costMonth" /></label>
+          <button id="loadCosts">查看成本</button>
+          <button id="exportCostPdf">生成成本PDF</button>
+        </div>
+        <div id="costSummary" class="cards"></div>
+        <div class="table-wrap">
+          <table id="costsTable"></table>
+        </div>
+      </section>
+
+      <section id="tab-accounts" class="panel" data-admin-only="1">
+        <div class="settings-card">
+          <h2>账户管理</h2>
+          <div class="form-grid">
+            <label>用户名 <input id="accountUsername" placeholder="例如：teacher01" /></label>
+            <label>显示姓名 <input id="accountDisplayName" placeholder="例如：王老师" /></label>
+            <label>角色
+              <select id="accountRole">
+                <option value="teacher">老师</option>
+                <option value="admin">管理员</option>
+              </select>
+            </label>
+            <label>PIN <input id="accountPin" type="password" inputmode="numeric" placeholder="新账号必填；修改时留空表示不改" /></label>
+            <label>状态
+              <select id="accountActive">
+                <option value="1">启用</option>
+                <option value="0">停用</option>
+              </select>
+            </label>
+            <button id="saveAccount" class="primary">保存账户</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="accountsTable"></table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
