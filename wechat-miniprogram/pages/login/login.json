@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "登录"
+  "navigationBarTitleText": "优贝思登录",
+  "navigationBarBackgroundColor": "#050505",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#050505"
 }

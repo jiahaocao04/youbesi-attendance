@@ -1,29 +1,49 @@
-<view class="login">
-  <view class="bg-orb orb-a"></view>
-  <view class="bg-orb orb-b"></view>
-  <view class="bg-grid"></view>
+<view class="login-page">
+  <view class="grid-layer"></view>
+  <view class="scan-line"></view>
+  <view class="light light-a"></view>
+  <view class="light light-b"></view>
 
-  <view class="panel card">
-    <view class="brand">
-      <view class="logo">优</view>
-      <view>
-        <view class="title">优贝思校外托管中心</view>
-        <view class="sub">老师端点名小程序</view>
+  <view class="login-shell">
+    <view class="brand-row">
+      <view class="brand-mark">YBS</view>
+      <view class="brand-copy">
+        <text class="kicker">CLOUD ATTENDANCE OS</text>
+        <text class="brand-name">优贝思校外托管中心</text>
       </view>
     </view>
 
-    <view class="cloud-pill">云端自动连接 · 多设备同步</view>
-
-    <view class="field">
-      <text>用户名</text>
-      <input value="{{username}}" bindinput="onUsername" placeholder="请输入账号" />
-    </view>
-    <view class="field">
-      <text>PIN</text>
-      <input value="{{pin}}" bindinput="onPin" password type="number" placeholder="请输入 PIN" />
+    <view class="hero">
+      <text class="hero-title">教师端登录</text>
+      <text class="hero-sub">多设备同步 · 云端保存 · 管理员可追溯</text>
     </view>
 
-    <button class="primary login-btn" loading="{{loading}}" bindtap="login">登录</button>
-    <view class="tip">服务器已锁定为云端地址，老师无需填写，避免误改。</view>
+    <view class="status-strip">
+      <view class="status-item">
+        <text class="status-dot"></text>
+        <text>HTTPS 云端</text>
+      </view>
+      <view class="status-item right">
+        <text>同步在线</text>
+      </view>
+    </view>
+
+    <view class="form-panel">
+      <view class="field">
+        <text class="field-label">USERNAME</text>
+        <input class="field-input" value="{{username}}" bindinput="onUsername" placeholder="输入账号" placeholder-class="placeholder" />
+      </view>
+
+      <view class="field">
+        <text class="field-label">PIN</text>
+        <input class="field-input" value="{{pin}}" bindinput="onPin" password type="number" placeholder="输入 PIN" placeholder-class="placeholder" />
+      </view>
+
+      <button class="login-button" loading="{{loading}}" bindtap="login">进入系统</button>
+    </view>
+
+    <view class="security-note">
+      服务器地址已锁定为云端，普通使用时不可误改。每台手机独立登录，同步到同一套云端数据。
+    </view>
   </view>
 </view>
