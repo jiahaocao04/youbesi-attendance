@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import calendar
 import hashlib
@@ -551,6 +551,7 @@ def upsert_user(payload: dict[str, Any], actor: str) -> dict[str, Any]:
 
 def seed_json_path() -> Path | None:
     candidates = [
+        BASE_DIR / "seed" / "student_import_data.json",
         BASE_DIR / "data" / "student_import_data.json",
         BASE_DIR.parent / "outputs" / "student_import_20260624" / "student_import_data.json",
     ]
@@ -649,6 +650,39 @@ def seed_students(actor: str = "\u7cfb\u7edf\u5bfc\u5165") -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     records = data.get("records", [])
     return import_student_records(records, actor, str(path))
+
+
+def auto_seed_students_if_empty() -> None:
+    flag = os.environ.get("JY_AUTO_SEED_STUDENTS", "1").strip().lower()
+    if flag in {"0", "false", "no", "off"}:
+        print("\u5b66\u751f\u540d\u5355\u81ea\u52a8\u5bfc\u5165\uff1a\u5df2\u5173\u95ed")
+        return
+
+    path = seed_json_path()
+    if path is None:
+        print("\u5b66\u751f\u540d\u5355\u81ea\u52a8\u5bfc\u5165\uff1a\u672a\u627e\u5230 student_import_data.json\uff0c\u8df3\u8fc7")
+        return
+
+    with DB_LOCK:
+        with db_conn() as db:
+            count = db.execute("SELECT COUNT(*) AS c FROM students").fetchone()["c"]
+
+    if count:
+        print(f"\u5b66\u751f\u540d\u5355\u81ea\u52a8\u5bfc\u5165\uff1a\u5df2\u6709 {count} \u540d\u5b66\u751f\uff0c\u4e0d\u91cd\u590d\u5bfc\u5165")
+        return
+
+    try:
+        result = seed_students("\u7cfb\u7edf\u81ea\u52a8\u5bfc\u5165")
+    except Exception as exc:
+        print(f"\u5b66\u751f\u540d\u5355\u81ea\u52a8\u5bfc\u5165\u5931\u8d25\uff1a{exc}")
+        return
+
+    print(
+        "\u5b66\u751f\u540d\u5355\u81ea\u52a8\u5bfc\u5165\u5b8c\u6210\uff1a"
+        f"\u65b0\u589e {result.get('inserted', 0)}\uff0c"
+        f"\u66f4\u65b0 {result.get('updated', 0)}\uff0c"
+        f"\u5171 {result.get('total', 0)}"
+    )
 
 
 def list_students(params: dict[str, list[str]]) -> list[dict[str, Any]]:
@@ -2372,6 +2406,7 @@ def local_ip_addresses() -> list[str]:
 
 def main() -> None:
     execute_script()
+    auto_seed_students_if_empty()
     host = os.environ.get("JY_HOST", "0.0.0.0")
     port = int(os.environ.get("PORT") or os.environ.get("JY_PORT", "8766"))
     ThreadingHTTPServer.allow_reuse_address = True
