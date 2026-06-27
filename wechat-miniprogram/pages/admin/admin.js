@@ -18,6 +18,25 @@ function money(value) {
   return n.toFixed(2);
 }
 
+function studentSearchText(item) {
+  if (!item) return "";
+  return [
+    item.name,
+    item.grade,
+    item.class_no,
+    `${item.grade}-${item.class_no}`,
+    `${item.grade}.${item.class_no}`,
+    item.permanent_id,
+    item.annual_id
+  ].join(" ").toLowerCase();
+}
+
+function filterStudents(students, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return students;
+  return students.filter((item) => studentSearchText(item).includes(q));
+}
+
 Page({
   data: {
     month: currentMonth(),
@@ -41,6 +60,7 @@ Page({
     settlements: [],
     costs: [],
     costSummary: {},
+    settings: {},
     users: [],
     paymentMethods: ["微信", "支付宝", "现金", "其它"],
     paymentMethodIndex: 0,
@@ -50,9 +70,7 @@ Page({
       note: ""
     },
     costTypes: [
-      { label: "固定成本", value: "fixed" },
-      { label: "食材/变动", value: "variable" },
-      { label: "人工成本", value: "labor" },
+      { label: "食材", value: "variable" },
       { label: "其它成本", value: "other" }
     ],
     costTypeIndex: 0,
@@ -60,6 +78,13 @@ Page({
       item: "",
       amount: "",
       note: ""
+    },
+    fixedCostForm: {
+      amount: ""
+    },
+    laborForm: {
+      teacher: "",
+      salary: ""
     },
     userRoles: ["teacher", "admin"],
     userRoleIndex: 0,
@@ -69,7 +94,10 @@ Page({
       pin: "",
       active: true
     },
-    reportStudent: null
+    reportStudent: null,
+    reportStudentSearchText: "",
+    reportStudentOpen: false,
+    filteredReportStudents: []
   },
 
   onLoad() {
@@ -107,14 +135,16 @@ Page({
     this.setData({ loading: true });
     try {
       const month = this.data.month;
-      const [dashboard, students, payments, settlements, costs, users] = await Promise.all([
+      const [dashboard, students, payments, settlements, costs, users, settings] = await Promise.all([
         request(`/api/dashboard?month=${month}`),
         request(`/api/students?q=${encodeURIComponent(this.data.studentQuery || "")}`),
         request(`/api/payments?month=${month}`),
         request(`/api/settlements?month=${month}`),
         request(`/api/costs?month=${month}`),
-        request("/api/users")
+        request("/api/users"),
+        request("/api/settings")
       ]);
+      const settingMap = settings.settings || {};
       this.setData({
         dashboard: dashboard.dashboard || {},
         students: students.students || [],
@@ -122,10 +152,23 @@ Page({
         settlements: settlements.rows || [],
         costs: costs.rows || [],
         costSummary: costs.summary || {},
-        users: users.users || []
+        settings: settingMap,
+        users: users.users || [],
+        fixedCostForm: {
+          amount: settingMap.monthly_fixed_cost_amount || ""
+        },
+        laborForm: {
+          teacher: settingMap.monthly_labor_teacher || "",
+          salary: settingMap.monthly_labor_salary || ""
+        },
+        filteredReportStudents: filterStudents(students.students || [], this.data.reportStudentSearchText)
       });
       if (!this.data.selectedStudent && (students.students || []).length) {
-        this.setData({ selectedStudent: students.students[0], reportStudent: students.students[0] });
+        this.setData({
+          selectedStudent: students.students[0],
+          reportStudent: students.students[0],
+          reportStudentSearchText: students.students[0].name
+        });
       }
     } catch (err) {
       wx.showToast({ title: err.message || "后台载入失败", icon: "none" });
@@ -242,6 +285,49 @@ Page({
     }
   },
 
+  onFixedCostAmount(e) {
+    this.setData({ "fixedCostForm.amount": e.detail.value });
+  },
+
+  async saveFixedCost() {
+    try {
+      await request("/api/settings", {
+        method: "POST",
+        data: {
+          monthly_fixed_cost_amount: Number(this.data.fixedCostForm.amount || 0)
+        }
+      });
+      wx.showToast({ title: "固定成本已保存", icon: "success" });
+      this.refreshAll();
+    } catch (err) {
+      wx.showToast({ title: err.message || "固定成本保存失败", icon: "none" });
+    }
+  },
+
+  onLaborTeacher(e) {
+    this.setData({ "laborForm.teacher": e.detail.value });
+  },
+
+  onLaborSalary(e) {
+    this.setData({ "laborForm.salary": e.detail.value });
+  },
+
+  async saveLaborCost() {
+    try {
+      await request("/api/settings", {
+        method: "POST",
+        data: {
+          monthly_labor_teacher: this.data.laborForm.teacher,
+          monthly_labor_salary: Number(this.data.laborForm.salary || 0)
+        }
+      });
+      wx.showToast({ title: "人工成本已保存", icon: "success" });
+      this.refreshAll();
+    } catch (err) {
+      wx.showToast({ title: err.message || "人工成本保存失败", icon: "none" });
+    }
+  },
+
   async generateSettlement() {
     wx.showLoading({ title: "生成中" });
     try {
@@ -286,6 +372,42 @@ Page({
     } finally {
       wx.hideLoading();
     }
+  },
+
+  onReportStudentFocus() {
+    this.setData({
+      reportStudentOpen: true,
+      reportStudentSearchText: this.data.reportStudent ? this.data.reportStudent.name : "",
+      filteredReportStudents: filterStudents(this.data.students, "")
+    });
+  },
+
+  onReportStudentInput(e) {
+    const value = e.detail.value;
+    this.setData({
+      reportStudentSearchText: value,
+      reportStudentOpen: true,
+      filteredReportStudents: filterStudents(this.data.students, value)
+    });
+  },
+
+  selectReportStudent(e) {
+    const pid = e.currentTarget.dataset.pid;
+    const student = this.data.students.find((item) => item.permanent_id === pid);
+    if (!student) return;
+    this.setData({
+      reportStudent: student,
+      selectedStudent: student,
+      reportStudentSearchText: student.name,
+      reportStudentOpen: false
+    });
+  },
+
+  closeReportStudentSearch() {
+    this.setData({
+      reportStudentOpen: false,
+      reportStudentSearchText: this.data.reportStudent ? this.data.reportStudent.name : ""
+    });
   },
 
   onUserField(e) {

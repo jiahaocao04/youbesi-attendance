@@ -316,6 +316,9 @@ def execute_script() -> None:
                 "bed_monthly_fee": "50",
                 "care_rate": "25",
                 "bed_daily_rate": "50",
+                "monthly_fixed_cost_amount": "0",
+                "monthly_labor_teacher": "",
+                "monthly_labor_salary": "0",
             }
             for key, value in defaults.items():
                 db.execute(
@@ -719,14 +722,28 @@ def settings_map_from_db(db: sqlite3.Connection) -> dict[str, str]:
 
 
 def update_settings(payload: dict[str, Any], actor: str) -> dict[str, str]:
-    allowed = {"lunch_rate", "full_day_rate", "evening_only_rate", "bed_monthly_fee", "care_rate", "bed_daily_rate"}
+    money_keys = {
+        "lunch_rate",
+        "full_day_rate",
+        "evening_only_rate",
+        "bed_monthly_fee",
+        "care_rate",
+        "bed_daily_rate",
+        "monthly_fixed_cost_amount",
+        "monthly_labor_salary",
+    }
+    text_keys = {"monthly_labor_teacher"}
+    allowed = money_keys | text_keys
     with DB_LOCK:
         with db_conn() as db:
             db.execute("BEGIN IMMEDIATE")
             before = settings_map_from_db(db)
             for key in allowed:
                 if key in payload:
-                    value = str(round_money(payload[key]))
+                    if key in money_keys:
+                        value = str(round_money(payload[key]))
+                    else:
+                        value = str(payload.get(key) or "").strip()
                     db.execute(
                         """
                         INSERT INTO fee_settings(key, value, updated_at)
@@ -1019,7 +1036,7 @@ def create_cost_record(payload: dict[str, Any], actor: str) -> dict[str, Any]:
 def cost_type_label(value: str) -> str:
     return {
         "fixed": "\u56fa\u5b9a\u6210\u672c",
-        "variable": "\u53d8\u52a8\u6210\u672c",
+        "variable": "\u98df\u6750",
         "labor": "\u4eba\u5de5\u6210\u672c",
         "other": "\u5176\u4ed6\u6210\u672c",
     }.get(value or "", value or "")
@@ -1063,6 +1080,40 @@ def list_costs(params: dict[str, list[str]]) -> dict[str, Any]:
         summary["grand_total"] = round_money(summary["grand_total"] + round_money(r["total"]))
     for row in rows:
         row["cost_type_label"] = cost_type_label(row["cost_type"])
+    settings = settings_map()
+    monthly_fixed = round_money(settings.get("monthly_fixed_cost_amount", 0))
+    monthly_labor_salary = round_money(settings.get("monthly_labor_salary", 0))
+    monthly_labor_teacher = str(settings.get("monthly_labor_teacher", "")).strip()
+    if monthly_fixed > 0:
+        rows.append({
+            "id": "monthly_fixed",
+            "cost_date": f"{month}-01",
+            "cost_type": "fixed",
+            "cost_type_label": cost_type_label("fixed"),
+            "item": "\u56fa\u5b9a\u6210\u672c",
+            "amount": monthly_fixed,
+            "note": "\u6bcf\u6708\u56fa\u5b9a",
+            "operator": "\u7cfb\u7edf\u8bbe\u7f6e",
+            "created_at": "",
+        })
+        summary["fixed_total"] = round_money(summary["fixed_total"] + monthly_fixed)
+        summary["grand_total"] = round_money(summary["grand_total"] + monthly_fixed)
+        summary["record_count"] += 1
+    if monthly_labor_salary > 0:
+        rows.append({
+            "id": "monthly_labor",
+            "cost_date": f"{month}-01",
+            "cost_type": "labor",
+            "cost_type_label": cost_type_label("labor"),
+            "item": monthly_labor_teacher or "\u8001\u5e08\u5de5\u8d44",
+            "amount": monthly_labor_salary,
+            "note": "\u6bcf\u6708\u56fa\u5b9a",
+            "operator": "\u7cfb\u7edf\u8bbe\u7f6e",
+            "created_at": "",
+        })
+        summary["labor_total"] = round_money(summary["labor_total"] + monthly_labor_salary)
+        summary["grand_total"] = round_money(summary["grand_total"] + monthly_labor_salary)
+        summary["record_count"] += 1
     return {"summary": summary, "rows": rows}
 
 

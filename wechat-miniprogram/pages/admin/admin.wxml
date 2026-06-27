@@ -90,7 +90,7 @@
       <text class="card-title">成本记录</text>
       <picker mode="date" value="{{date}}" bindchange="onDateChange"><view class="field">日期：{{date}}</view></picker>
       <picker range="{{costTypes}}" range-key="label" value="{{costTypeIndex}}" bindchange="onCostType"><view class="field">类型：{{costTypes[costTypeIndex].label}}</view></picker>
-      <input class="field-input" value="{{costForm.item}}" placeholder="项目，如房租/肉/水果/人工" bindinput="onCostItem" />
+      <input class="field-input" value="{{costForm.item}}" placeholder="项目，如肉/水果/牛奶/其它" bindinput="onCostItem" />
       <input class="field-input" type="digit" value="{{costForm.amount}}" placeholder="金额" bindinput="onCostAmount" />
       <input class="field-input" value="{{costForm.note}}" placeholder="备注" bindinput="onCostNote" />
       <view class="primary-action" bindtap="submitCost">保存成本</view>
@@ -106,19 +106,45 @@
         <view><text class="row-title">{{item.item}} ¥{{item.amount}}</text><text class="row-sub">{{item.cost_date}} {{item.cost_type_label}} {{item.note}}</text></view>
       </view>
     </view>
+    <view class="stable-costs">
+      <view class="stable-row">
+        <text class="stable-title">固定成本</text>
+        <input class="stable-input" type="digit" value="{{fixedCostForm.amount}}" placeholder="月金额" bindinput="onFixedCostAmount" />
+        <view class="save-mini" bindtap="saveFixedCost">保存</view>
+      </view>
+      <view class="stable-row labor">
+        <text class="stable-title">人工成本</text>
+        <input class="stable-input teacher" value="{{laborForm.teacher}}" placeholder="老师" bindinput="onLaborTeacher" />
+        <input class="stable-input salary" type="digit" value="{{laborForm.salary}}" placeholder="月工资" bindinput="onLaborSalary" />
+        <view class="save-mini" bindtap="saveLaborCost">保存</view>
+      </view>
+    </view>
   </view>
 
   <view wx:if="{{active === 'reports'}}" class="section">
     <view class="card">
       <text class="card-title">生成报表</text>
       <picker mode="date" value="{{date}}" bindchange="onDateChange"><view class="field">日报日期：{{date}}</view></picker>
+      <view class="student-report-box">
+        <view class="field-title">学生明细对象</view>
+        <view class="report-search-line">
+          <input class="report-student-input" value="{{reportStudentSearchText}}" placeholder="搜索学生姓名/班级" bindfocus="onReportStudentFocus" bindinput="onReportStudentInput" />
+          <view wx:if="{{reportStudentOpen}}" class="search-close" bindtap="closeReportStudentSearch">收起</view>
+        </view>
+        <view wx:if="{{reportStudentOpen}}" class="report-student-dropdown">
+          <view wx:for="{{filteredReportStudents}}" wx:key="permanent_id" class="report-student-option {{reportStudent.permanent_id === item.permanent_id ? 'active' : ''}}" data-pid="{{item.permanent_id}}" bindtap="selectReportStudent">
+            <text>{{item.name}}</text>
+            <text>{{item.grade}}-{{item.class_no}}</text>
+          </view>
+          <view wx:if="{{!filteredReportStudents.length}}" class="no-class">没有找到学生</view>
+        </view>
+      </view>
       <view class="action-grid">
         <view class="primary-action" data-type="daily" bindtap="generateReport">当日日报</view>
         <view class="primary-action" data-type="monthly" bindtap="generateReport">月报</view>
         <view class="primary-action" data-type="costs" bindtap="generateReport">成本报表</view>
         <view class="primary-action" data-type="student" bindtap="generateReport">学生明细</view>
       </view>
-      <view class="chosen">学生明细对象：{{reportStudent.name || '请在学生页选择'}}</view>
     </view>
   </view>
 

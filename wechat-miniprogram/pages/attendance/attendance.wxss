@@ -38,9 +38,10 @@ text {
 .top-card {
   position: sticky;
   top: 0;
-  z-index: 8;
+  z-index: 80;
   padding: 14rpx;
   backdrop-filter: blur(18rpx);
+  overflow: visible;
 }
 
 .first-line {
@@ -78,6 +79,7 @@ text {
 
 .class-search-wrap {
   position: relative;
+  z-index: 90;
   margin-top: 12rpx;
 }
 
@@ -123,8 +125,8 @@ text {
   left: 0;
   right: 0;
   top: 78rpx;
-  z-index: 20;
-  max-height: 420rpx;
+  z-index: 200;
+  max-height: 596rpx;
   overflow-y: auto;
   padding: 8rpx;
   border: 1rpx solid #dbeafe;
