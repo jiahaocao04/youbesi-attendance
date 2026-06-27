@@ -41,14 +41,23 @@
       <input class="search-input" value="{{studentQuery}}" placeholder="搜索学生/班级" bindinput="onStudentSearch" />
       <view class="small-action" bindtap="searchStudents">搜索</view>
     </view>
-    <view class="list">
-      <view wx:for="{{students}}" wx:key="permanent_id" class="list-row {{selectedStudent.permanent_id === item.permanent_id ? 'active' : ''}}" data-pid="{{item.permanent_id}}" bindtap="selectStudent">
-        <view class="student-avatar" data-pid="{{item.permanent_id}}" catchtap="openStudentReport">{{item.name_initial}}</view>
-        <view>
-          <text class="row-title">{{item.name}}</text>
-          <text class="row-sub">{{item.grade}}-{{item.class_no}}　{{item.permanent_id}}</text>
+    <view class="student-roster-card">
+      <view class="student-grid">
+        <view wx:for="{{students}}" wx:key="permanent_id" class="student-tile {{item.balance_class}}">
+          <view wx:if="{{item.showClassHeader}}" class="class-header">{{item.grade}}-{{item.class_no}}</view>
+          <view class="student-name-zone" data-pid="{{item.permanent_id}}" bindtap="openStudentReport">
+            <text class="student-name">{{item.name}}</text>
+            <text class="student-sub">{{item.permanent_id}}</text>
+          </view>
+          <view class="student-mini-tags">
+            <text>A {{item.lunch_present_days || 0}}天</text>
+            <text>P {{item.care_present_days || 0}}天</text>
+          </view>
+          <view class="money-line">
+            <text>已花 ¥{{item.current_spent || 0}}</text>
+            <text class="{{item.balance_class}}">{{item.balance_text}}</text>
+          </view>
         </view>
-        <text class="row-money">¥{{item.current_balance || 0}}</text>
       </view>
     </view>
     <view wx:if="{{studentReportOpen}}" class="student-report-card">
@@ -62,11 +71,15 @@
       <view class="mini-stat-grid">
         <view><text>本月 A</text><text>{{studentReport.lunch_present_days || 0}} 天</text></view>
         <view><text>本月 P</text><text>{{studentReport.care_present_days || 0}} 天</text></view>
-        <view><text>期初余额</text><text>¥{{studentReport.opening_balance || 0}}</text></view>
-        <view><text>学生编号</text><text>{{studentReport.annual_id}}</text></view>
+        <view><text>全天</text><text>{{studentReport.full_day_days || 0}} 天</text></view>
+        <view><text>购物</text><text>¥{{studentReport.shopping_fee || 0}}</text></view>
+        <view><text>已花费</text><text>¥{{studentReport.current_spent || 0}}</text></view>
+        <view><text>充值</text><text>¥{{studentReport.recharge_amount || 0}}</text></view>
+        <view><text>期初/上月</text><text>¥{{studentReport.opening_balance_live || 0}}</text></view>
+        <view><text>余额状态</text><text>{{studentReport.balance_text}}</text></view>
       </view>
       <view class="action-grid">
-        <view class="primary-action" data-type="student" bindtap="generateReport">生成学生 PDF</view>
+        <view class="primary-action" data-type="student" bindtap="generateReport">生成本月学生 PDF</view>
         <view class="small-action" bindtap="closeStudentReport">关闭</view>
       </view>
     </view>

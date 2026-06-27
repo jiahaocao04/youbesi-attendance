@@ -38,9 +38,33 @@ function filterStudents(students, query) {
 }
 
 function decorateStudents(students) {
+  let lastClassKey = "";
   return (students || []).map((item) => {
-    const chars = Array.from(String(item.name || "").trim());
-    return { ...item, name_initial: chars.length ? chars[0] : "生" };
+    const classKey = `${item.grade || ""}-${item.class_no || ""}`;
+    const showClassHeader = classKey !== lastClassKey;
+    lastClassKey = classKey;
+    const balance = Number(item.current_balance || 0);
+    const absBalance = Math.abs(balance).toFixed(2);
+    let balanceClass = "clear";
+    let balanceText = "刚好 ¥0.00";
+    if (balance < 0) {
+      balanceClass = "debt";
+      balanceText = `欠费 ¥${absBalance}`;
+    } else if (balance > 0) {
+      balanceClass = "surplus";
+      balanceText = `盈余 ¥${absBalance}`;
+    }
+    return {
+      ...item,
+      showClassHeader,
+      balance_class: balanceClass,
+      balance_text: balanceText,
+      current_spent: Number(item.current_spent || 0).toFixed(2),
+      current_balance: balance.toFixed(2),
+      opening_balance_live: Number(item.opening_balance_live || 0).toFixed(2),
+      recharge_amount: Number(item.recharge_amount || 0).toFixed(2),
+      shopping_fee: Number(item.shopping_fee || 0).toFixed(2)
+    };
   });
 }
 

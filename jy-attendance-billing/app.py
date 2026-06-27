@@ -710,6 +710,8 @@ def list_students(params: dict[str, list[str]]) -> list[dict[str, Any]]:
         rows = db.execute(sql, args).fetchall()
         if month:
             start, end = month_range(month)
+            rates = current_rate_settings()
+            prev_map = previous_balance_map(db, month)
             stats_rows = db.execute(
                 """
                 SELECT
@@ -717,7 +719,11 @@ def list_students(params: dict[str, list[str]]) -> list[dict[str, Any]]:
                     SUM(CASE WHEN lunch_status = 'present' THEN 1 ELSE 0 END) AS lunch_present_days,
                     SUM(CASE WHEN lunch_status != 'unmarked' THEN 1 ELSE 0 END) AS lunch_recorded_days,
                     SUM(CASE WHEN care_status = 'present' THEN 1 ELSE 0 END) AS care_present_days,
-                    SUM(CASE WHEN care_status != 'unmarked' THEN 1 ELSE 0 END) AS care_recorded_days
+                    SUM(CASE WHEN care_status != 'unmarked' THEN 1 ELSE 0 END) AS care_recorded_days,
+                    SUM(CASE WHEN lunch_status = 'present' AND care_status = 'present' THEN 1 ELSE 0 END) AS full_day_days,
+                    SUM(CASE WHEN lunch_status = 'present' AND care_status != 'present' THEN 1 ELSE 0 END) AS lunch_only_days,
+                    SUM(CASE WHEN lunch_status != 'present' AND care_status = 'present' THEN 1 ELSE 0 END) AS evening_only_days,
+                    SUM(CASE WHEN bed_status = 'used' THEN 1 ELSE 0 END) AS bed_days
                 FROM attendance
                 WHERE attendance_date BETWEEN ? AND ?
                 GROUP BY permanent_id
@@ -725,14 +731,57 @@ def list_students(params: dict[str, list[str]]) -> list[dict[str, Any]]:
                 (start, end),
             ).fetchall()
             stats = {r["permanent_id"]: r for r in stats_rows}
+            payment_rows = db.execute(
+                """
+                SELECT permanent_id, SUM(amount) AS recharge_amount
+                FROM payments
+                WHERE payment_date BETWEEN ? AND ?
+                GROUP BY permanent_id
+                """,
+                (start, end),
+            ).fetchall()
+            payment_map = {r["permanent_id"]: round_money(r["recharge_amount"]) for r in payment_rows}
+            shopping_rows = db.execute(
+                """
+                SELECT permanent_id, SUM(amount) AS shopping_fee
+                FROM student_purchases
+                WHERE purchase_date BETWEEN ? AND ?
+                GROUP BY permanent_id
+                """,
+                (start, end),
+            ).fetchall()
+            shopping_map = {r["permanent_id"]: round_money(r["shopping_fee"]) for r in shopping_rows}
         else:
             stats = {}
+            rates = current_rate_settings()
+            prev_map = {}
+            payment_map = {}
+            shopping_map = {}
         for row in rows:
             s = stats.get(row["permanent_id"], {})
             row["lunch_present_days"] = int(s.get("lunch_present_days") or 0)
             row["lunch_recorded_days"] = int(s.get("lunch_recorded_days") or 0)
             row["care_present_days"] = int(s.get("care_present_days") or 0)
             row["care_recorded_days"] = int(s.get("care_recorded_days") or 0)
+            row["full_day_days"] = int(s.get("full_day_days") or 0)
+            row["lunch_only_days"] = int(s.get("lunch_only_days") or 0)
+            row["evening_only_days"] = int(s.get("evening_only_days") or 0)
+            row["bed_days"] = int(s.get("bed_days") or 0)
+            row["recharge_amount"] = payment_map.get(row["permanent_id"], 0.0)
+            row["shopping_fee"] = shopping_map.get(row["permanent_id"], 0.0)
+            row["opening_balance_live"] = prev_map.get(row["permanent_id"], round_money(row["opening_balance"]))
+            lunch_fee = round_money(row["lunch_only_days"] * rates["lunch_rate"])
+            full_day_fee = round_money(row["full_day_days"] * rates["full_day_rate"])
+            evening_only_fee = round_money(row["evening_only_days"] * rates["evening_only_rate"])
+            bed_fee = 0.0 if int(row.get("bed_fee_exempt") or 0) or row["bed_days"] <= 0 else rates["bed_monthly_fee"]
+            row["current_spent"] = round_money(lunch_fee + full_day_fee + evening_only_fee + bed_fee + row["shopping_fee"])
+            row["current_balance"] = round_money(row["opening_balance_live"] + row["recharge_amount"] - row["current_spent"])
+            if row["current_balance"] < 0:
+                row["balance_status"] = "欠费"
+            elif row["current_balance"] > 0:
+                row["balance_status"] = "盈余"
+            else:
+                row["balance_status"] = "刚好"
         return rows
 
 

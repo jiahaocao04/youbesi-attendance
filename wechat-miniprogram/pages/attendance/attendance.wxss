@@ -231,8 +231,8 @@ text {
 }
 
 .student-tile.has-event {
-  background: rgba(254, 226, 226, 0.86);
-  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(254, 249, 195, 0.86);
+  border-color: rgba(234, 179, 8, 0.34);
 }
 
 .student-tile.has-shopping {
@@ -253,23 +253,9 @@ text {
 }
 
 .name-zone {
-  display: grid;
-  grid-template-columns: 42rpx minmax(0, 1fr);
-  column-gap: 8rpx;
+  display: block;
   align-items: center;
   min-height: 58rpx;
-}
-
-.avatar {
-  width: 42rpx;
-  height: 42rpx;
-  line-height: 42rpx;
-  border-radius: 50%;
-  background: #0f172a;
-  color: #ffffff;
-  text-align: center;
-  font-size: 20rpx;
-  font-weight: 900;
 }
 
 .name-lines {
@@ -303,8 +289,8 @@ text {
 }
 
 .tag.event {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .tag.shop {

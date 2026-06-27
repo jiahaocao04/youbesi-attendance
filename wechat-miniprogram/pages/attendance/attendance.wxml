@@ -53,9 +53,8 @@
         <view wx:if="{{item.showClassHeader}}" class="class-header">{{item.grade}}-{{item.class_no}}</view>
 
         <view class="name-zone" data-index="{{index}}" bindtap="openStudentEditor">
-          <view class="avatar">{{item.name_initial}}</view>
           <view class="name-lines">
-            <text class="name">{{item.seq_in_class}}. {{item.name}}</text>
+            <text class="name">{{item.name}}</text>
             <view class="mini-tags">
               <text wx:if="{{item.note}}" class="tag event">事件</text>
               <text wx:if="{{item.shopping_item || item.shopping_amount}}" class="tag shop">购 ¥{{item.shopping_amount}}</text>
