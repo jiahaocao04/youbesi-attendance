@@ -249,6 +249,19 @@ text {
   border-radius: 16rpx;
 }
 
+.student-avatar {
+  flex: none;
+  width: 54rpx;
+  height: 54rpx;
+  line-height: 54rpx;
+  border-radius: 50%;
+  background: #0f172a;
+  color: #ffffff;
+  text-align: center;
+  font-size: 22rpx;
+  font-weight: 900;
+}
+
 .row-title {
   display: block;
   color: #111827;
@@ -269,6 +282,93 @@ text {
   color: #1d4ed8;
   font-size: 23rpx;
   font-weight: 900;
+}
+
+.student-report-card {
+  margin-top: 14rpx;
+  padding: 16rpx;
+  border: 1rpx solid #dbeafe;
+  border-radius: 22rpx;
+  background: #ffffff;
+  box-shadow: 0 12rpx 28rpx rgba(15, 23, 42, 0.06);
+}
+
+.panel-close {
+  flex: none;
+  width: 46rpx;
+  height: 46rpx;
+  line-height: 42rpx;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #0f172a;
+  text-align: center;
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.mini-stat-grid,
+.report-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10rpx;
+  margin-top: 12rpx;
+}
+
+.mini-stat-grid view,
+.report-summary view {
+  min-height: 76rpx;
+  padding: 12rpx;
+  border-radius: 16rpx;
+  background: #f8fafc;
+}
+
+.mini-stat-grid text,
+.report-summary text {
+  display: block;
+  color: #64748b;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.mini-stat-grid text:last-child,
+.report-summary text:last-child {
+  margin-top: 6rpx;
+  color: #0f172a;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.report-summary .total {
+  grid-column: span 2;
+  background: #eff6ff;
+}
+
+.report-summary .total text:last-child {
+  color: #1d4ed8;
+  font-size: 34rpx;
+}
+
+.report-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10rpx;
+  margin-top: 14rpx;
+}
+
+.report-links view {
+  height: 56rpx;
+  line-height: 56rpx;
+  border-radius: 16rpx;
+  background: #f1f5f9;
+  color: #334155;
+  text-align: center;
+  font-size: 22rpx;
+  font-weight: 900;
+}
+
+.report-links view.active {
+  background: #0f172a;
+  color: #ffffff;
 }
 
 .action-grid {

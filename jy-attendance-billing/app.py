@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import calendar
 import hashlib
@@ -18,7 +18,7 @@ import time
 import urllib.parse
 import zipfile
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -734,6 +734,120 @@ def list_students(params: dict[str, list[str]]) -> list[dict[str, Any]]:
             row["care_present_days"] = int(s.get("care_present_days") or 0)
             row["care_recorded_days"] = int(s.get("care_recorded_days") or 0)
         return rows
+
+
+def parse_grade_class(value: str) -> tuple[str, str]:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("请填写班级")
+    nums = re.findall(r"\d+", text)
+    if len(nums) >= 2:
+        return nums[0], nums[1]
+    if len(nums) == 1:
+        return nums[0], "0"
+    raise ValueError("班级格式请填写为 1-1 或 1.1")
+
+
+def current_academic_year(db: sqlite3.Connection) -> str:
+    row = db.execute(
+        """
+        SELECT academic_year, COUNT(*) AS c
+        FROM students
+        WHERE academic_year != ''
+        GROUP BY academic_year
+        ORDER BY c DESC, academic_year DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    return str(row["academic_year"] if row else "25学年")
+
+
+def academic_year_code(academic_year: str) -> str:
+    match = re.search(r"\d+", str(academic_year or ""))
+    return match.group(0)[-2:] if match else "25"
+
+
+def create_student(payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    name = str(payload.get("name") or "").strip()
+    grade = str(payload.get("grade") or "").strip()
+    class_no = str(payload.get("class_no") or "").strip()
+    class_text = str(payload.get("class_text") or "").strip()
+    if not name:
+        raise ValueError("请填写学生姓名")
+    if not grade:
+        grade, class_no = parse_grade_class(class_text)
+    if not class_no:
+        class_no = "0"
+    if not re.fullmatch(r"\d+", grade) or not re.fullmatch(r"\d+", class_no):
+        raise ValueError("班级格式请填写为 1-1 或 1.1")
+
+    with DB_LOCK:
+        with db_conn() as db:
+            db.execute("BEGIN IMMEDIATE")
+            academic_year = str(payload.get("academic_year") or "").strip() or current_academic_year(db)
+            year_code = academic_year_code(academic_year)
+            max_pid_row = db.execute(
+                """
+                SELECT permanent_id FROM students
+                WHERE permanent_id LIKE 'JY-STU-%'
+                ORDER BY CAST(SUBSTR(permanent_id, 8) AS INTEGER) DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            next_pid_no = 1
+            if max_pid_row:
+                match = re.search(r"(\d+)$", str(max_pid_row["permanent_id"]))
+                if match:
+                    next_pid_no = int(match.group(1)) + 1
+            seq_row = db.execute(
+                """
+                SELECT COALESCE(MAX(seq_in_class), 0) AS max_seq
+                FROM students
+                WHERE academic_year = ? AND grade = ? AND class_no = ?
+                """,
+                (academic_year, grade, class_no),
+            ).fetchone()
+            seq = int(seq_row["max_seq"] or 0) + 1
+            permanent_id = f"JY-STU-{next_pid_no:04d}"
+            annual_id = f"JY{year_code}-G{int(grade):02d}C{int(class_no):02d}-{seq:03d}"
+            timestamp = now_text()
+            row = {
+                "permanent_id": permanent_id,
+                "annual_id": annual_id,
+                "academic_year": academic_year,
+                "grade": grade,
+                "class_no": class_no,
+                "seq_in_class": seq,
+                "name": name,
+                "status": "在读",
+                "bed_fee_exempt": 0,
+                "opening_balance": round_money(payload.get("opening_balance")),
+                "import_month": str(payload.get("import_month") or today_text()[:7]),
+                "import_start_date": str(payload.get("import_start_date") or today_text()),
+                "source_row": 0,
+                "source_group_raw": "手动新增",
+                "note": str(payload.get("note") or ""),
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            }
+            db.execute(
+                """
+                INSERT INTO students(
+                    permanent_id, annual_id, academic_year, grade, class_no, seq_in_class,
+                    name, status, bed_fee_exempt, opening_balance, import_month, import_start_date,
+                    source_row, source_group_raw, note, created_at, updated_at
+                )
+                VALUES (
+                    :permanent_id, :annual_id, :academic_year, :grade, :class_no, :seq_in_class,
+                    :name, :status, :bed_fee_exempt, :opening_balance, :import_month, :import_start_date,
+                    :source_row, :source_group_raw, :note, :created_at, :updated_at
+                )
+                """,
+                row,
+            )
+            audit(db, actor, "create student", "student", permanent_id, None, row)
+            db.execute("COMMIT")
+            return row
 
 
 def list_classes() -> list[dict[str, Any]]:
@@ -1558,6 +1672,100 @@ def per_day_fee(lunch_status: str, care_status: str, rates: dict[str, float]) ->
     return "\u4e0d\u6536\u8d39", 0.0
 
 
+def billing_summary_between(start: str, end: str) -> dict[str, Any]:
+    require_date(start)
+    require_date(end)
+    rates = current_rate_settings()
+    full_day_care_part = max(0.0, round_money(rates["full_day_rate"] - rates["lunch_rate"]))
+    with db_conn() as db:
+        rows = db.execute(
+            """
+            SELECT lunch_status, care_status, COUNT(*) AS c
+            FROM attendance
+            WHERE attendance_date BETWEEN ? AND ?
+            GROUP BY lunch_status, care_status
+            """,
+            (start, end),
+        ).fetchall()
+        shopping_total = db.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) AS s
+            FROM student_purchases
+            WHERE purchase_date BETWEEN ? AND ?
+            """,
+            (start, end),
+        ).fetchone()["s"]
+
+    a_count = 0
+    p_count = 0
+    full_day_count = 0
+    lunch_only_count = 0
+    evening_only_count = 0
+    service_total = 0.0
+    for row in rows:
+        count = int(row["c"] or 0)
+        lunch = row["lunch_status"]
+        care = row["care_status"]
+        if lunch == "present":
+            a_count += count
+        if care == "present":
+            p_count += count
+        if lunch == "present" and care == "present":
+            full_day_count += count
+            service_total += count * rates["full_day_rate"]
+        elif lunch == "present":
+            lunch_only_count += count
+            service_total += count * rates["lunch_rate"]
+        elif care == "present":
+            evening_only_count += count
+            service_total += count * rates["evening_only_rate"]
+
+    lunch_amount = round_money(lunch_only_count * rates["lunch_rate"] + full_day_count * rates["lunch_rate"])
+    care_amount = round_money(evening_only_count * rates["evening_only_rate"] + full_day_count * full_day_care_part)
+    service_total = round_money(service_total)
+    shopping_total = round_money(shopping_total)
+    return {
+        "start": start,
+        "end": end,
+        "a_count": a_count,
+        "p_count": p_count,
+        "full_day_count": full_day_count,
+        "lunch_only_count": lunch_only_count,
+        "evening_only_count": evening_only_count,
+        "lunch_rate": rates["lunch_rate"],
+        "full_day_rate": rates["full_day_rate"],
+        "evening_only_rate": rates["evening_only_rate"],
+        "a_amount": lunch_amount,
+        "p_amount": care_amount,
+        "service_total": service_total,
+        "shopping_total": shopping_total,
+        "total": round_money(service_total + shopping_total),
+    }
+
+
+def report_summary(params: dict[str, list[str]]) -> dict[str, Any]:
+    scope = (params.get("scope") or ["daily"])[0]
+    if scope == "week":
+        base = datetime.strptime(require_date((params.get("date") or [today_text()])[0]), "%Y-%m-%d").date()
+        start_date = base - timedelta(days=base.weekday())
+        end_date = start_date + timedelta(days=6)
+        summary = billing_summary_between(start_date.isoformat(), end_date.isoformat())
+        summary["scope"] = "week"
+        return summary
+    if scope == "month":
+        month = require_month((params.get("month") or [today_text()[:7]])[0])
+        start, end = month_range(month)
+        summary = billing_summary_between(start, end)
+        summary["scope"] = "month"
+        summary["month"] = month
+        return summary
+    report_date = require_date((params.get("date") or [today_text()])[0])
+    summary = billing_summary_between(report_date, report_date)
+    summary["scope"] = "daily"
+    summary["date"] = report_date
+    return summary
+
+
 def register_pdf_font() -> str:
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
@@ -2209,6 +2417,9 @@ class AppHandler(BaseHTTPRequestHandler):
             elif path == "/api/admin/trace":
                 require_admin(self.current_user())
                 self.send_json({"ok": True, **list_admin_trace(params)})
+            elif path == "/api/reports/summary":
+                require_admin(self.current_user())
+                self.send_json({"ok": True, "summary": report_summary(params)})
             elif path == "/api/dashboard":
                 require_admin(self.current_user())
                 month = (params.get("month") or [today_text()[:7]])[0]
@@ -2315,6 +2526,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 require_admin(user)
                 records = payload.get("records") or []
                 self.send_json({"ok": True, "result": import_student_records(records, actor, "api-upload")})
+            elif path == "/api/students":
+                require_login_user(user)
+                self.send_json({"ok": True, "student": create_student(payload, actor)})
             elif path == "/api/settings":
                 require_admin(user)
                 self.send_json({"ok": True, "settings": update_settings(payload, actor)})

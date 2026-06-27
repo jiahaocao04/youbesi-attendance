@@ -9,16 +9,10 @@ function today() {
   return `${y}-${m}-${day}`;
 }
 
-function textWidthRpx(value, min = 54, max = 220) {
-  const len = Array.from(String(value || "").trim()).length;
-  if (!len) return min;
-  return Math.min(max, Math.max(min, len * 26 + 34));
-}
-
 function formatClassLabel(grade, classNo) {
   if (grade === "__all__") return "全部";
   if (!classNo || classNo === "0") return `${grade}年级`;
-  return `${grade}.${classNo}班`;
+  return `${grade}-${classNo}班`;
 }
 
 function classSearchText(item) {
@@ -50,15 +44,27 @@ function normalizeRecord(r) {
     care_status: r.care_status === "present" ? "present" : "absent",
     bed_status: r.bed_status || "not_used",
     note: String(r.note || ""),
-    eventWidth: textWidthRpx(r.note || "", 54, 210),
     shopping_item: item,
     shopping_amount: amount,
     shopping_amount_text: amountText,
-    shoppingItemWidth: textWidthRpx(item, 58, 150),
-    shoppingAmountWidth: textWidthRpx(amountText, 58, 108),
-    shoppingOpen: false,
     _shoppingPersisted: Boolean(item || amount)
   };
+}
+
+function decorateRecords(records) {
+  let lastClassKey = "";
+  return (records || []).map((r) => {
+    const classKey = `${r.grade || ""}-${r.class_no || ""}`;
+    const showClassHeader = classKey !== lastClassKey;
+    lastClassKey = classKey;
+    const chars = Array.from(String(r.name || "").trim());
+    return {
+      ...r,
+      showClassHeader,
+      class_label: formatClassLabel(String(r.grade || ""), String(r.class_no || "")),
+      name_initial: chars.length ? chars[0] : "生"
+    };
+  });
 }
 
 function summarize(records) {
@@ -102,7 +108,6 @@ Page({
   data: {
     date: today(),
     classes: [{ key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: 0 }],
-    classPickerRange: ["全部"],
     classSearchText: "全部",
     classSearchOpen: false,
     filteredClasses: [{ key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: 0 }],
@@ -115,11 +120,18 @@ Page({
     records: [],
     summary: { a: 0, p: 0, fullDay: 0, absent: 0 },
     absentRecords: [],
-    viewMode: "roster",
     isAdmin: false,
     loading: false,
     saving: false,
-    autoSaveText: ""
+    autoSaveText: "",
+    editorOpen: false,
+    editorIndex: -1,
+    editor: {},
+    addOpen: false,
+    addForm: {
+      class_text: "",
+      name: ""
+    }
   },
 
   onLoad() {
@@ -138,13 +150,28 @@ Page({
   },
 
   onHide() {
-    this.cleanupEmptyShoppingEditors(false);
+    this.closeEditor();
     this.flushAutoSaves();
   },
 
   onUnload() {
-    this.cleanupEmptyShoppingEditors(false);
+    this.closeEditor();
     this.flushAutoSaves();
+  },
+
+  stopTap() {},
+
+  closeTransient() {
+    this.setData({
+      classSearchOpen: false,
+      classSearchText: this.data.selectedClassLabel,
+      addOpen: false
+    });
+    this.closeEditor();
+  },
+
+  setRecords(records, cb) {
+    this.setData({ records: decorateRecords(records) }, cb);
   },
 
   async loadClasses() {
@@ -170,14 +197,19 @@ Page({
       const selected = classes[selectedClassIndex] || classes[0];
       this.setData({
         classes,
-        classPickerRange: classes.map((item) => `${item.label}（${item.count}）`),
-        filteredClasses: filterClasses(classes, this.data.classSearchText === this.data.selectedClassLabel ? "" : this.data.classSearchText),
+        filteredClasses: filterClasses(classes, ""),
         selectedClassIndex,
+        selectedClassKey: selected.key,
+        selectedGrade: selected.grade,
+        selectedClassNo: selected.class_no,
+        selectedClassLabel: selected.label,
         totalStudentCount: total,
         classSearchText: selected.label
       });
+      return classes;
     } catch (err) {
       wx.showToast({ title: err.message || "班级载入失败", icon: "none" });
+      return [];
     }
   },
 
@@ -188,7 +220,8 @@ Page({
     try {
       const data = await request(`/api/attendance?date=${this.data.date}&grade=${grade}&class_no=${classNo}`);
       const records = (data.records || []).map(normalizeRecord);
-      this.setData({ records, viewMode: "roster", autoSaveText: "" }, () => this.refreshSummary());
+      this.setRecords(records, () => this.refreshSummary());
+      this.setData({ autoSaveText: "" });
     } catch (err) {
       wx.showToast({ title: err.message || "载入失败", icon: "none" });
     } finally {
@@ -197,32 +230,18 @@ Page({
   },
 
   onDateChange(e) {
-    this.cleanupEmptyShoppingEditors(false);
+    this.closeEditor();
     this.flushAutoSaves();
     this.autoSaveTimers = {};
     this.dirtyPids = new Set();
-    this.setData({ date: e.detail.value, viewMode: "roster", autoSaveText: "" }, () => this.loadAttendance());
-  },
-
-  onClassTap(e) {
-    const key = e.currentTarget.dataset.key;
-    if (!key || key === this.data.selectedClassKey) return;
-    const index = this.data.classes.findIndex((item) => item.key === key);
-    const selected = this.data.classes[index];
-    if (!selected) return;
-    this.switchClass(selected, index);
-  },
-
-  onClassPickerChange(e) {
-    const index = Number(e.detail.value || 0);
-    const selected = this.data.classes[index];
-    if (!selected) return;
-    this.switchClass(selected, index);
+    this.setData({ date: e.detail.value, autoSaveText: "" }, () => this.loadAttendance());
   },
 
   onClassSearchFocus() {
     this.setData({
       classSearchOpen: true,
+      addOpen: false,
+      editorOpen: false,
       classSearchText: this.data.selectedClassLabel === "全部" ? "" : this.data.selectedClassLabel,
       filteredClasses: filterClasses(this.data.classes, "")
     });
@@ -245,25 +264,9 @@ Page({
     this.switchClass(selected, index);
   },
 
-  closeClassSearch() {
-    this.setData({
-      classSearchOpen: false,
-      classSearchText: this.data.selectedClassLabel
-    });
-  },
-
   switchClass(selected, index) {
     if (!selected) return;
-    const sameClass = selected.key === this.data.selectedClassKey;
-    if (sameClass) {
-      this.setData({
-        selectedClassIndex: index,
-        classSearchOpen: false,
-        classSearchText: selected.label
-      });
-      return;
-    }
-    this.cleanupEmptyShoppingEditors(false);
+    this.closeEditor();
     this.flushAutoSaves();
     this.autoSaveTimers = {};
     this.dirtyPids = new Set();
@@ -276,7 +279,8 @@ Page({
       classSearchText: selected.label,
       filteredClasses: filterClasses(this.data.classes, ""),
       classSearchOpen: false,
-      autoSaveText: "",
+      addOpen: false,
+      autoSaveText: ""
     }, () => this.loadAttendance());
   },
 
@@ -286,158 +290,155 @@ Page({
     this.setData({ summary, absentRecords });
   },
 
-  showRoster() {
-    this.cleanupEmptyShoppingEditors(false);
-    this.setData({ viewMode: "roster", classSearchOpen: false });
-  },
-
-  showAbsent() {
-    this.cleanupEmptyShoppingEditors(false);
-    this.setData({ viewMode: "absent", classSearchOpen: false });
-  },
-
   goAdmin() {
     wx.navigateTo({ url: "/pages/admin/admin" });
   },
 
   toggleAP(e) {
-    this.cleanupEmptyShoppingEditors(false);
+    this.closeEditor();
     const index = Number(e.currentTarget.dataset.index);
     const field = e.currentTarget.dataset.field;
     const records = this.data.records.slice();
     const rec = { ...records[index] };
     rec[field] = rec[field] === "present" ? "absent" : "present";
     records[index] = rec;
-    this.setData({ records }, () => {
+    this.setRecords(records, () => {
       this.refreshSummary();
       this.queueAutoSave(index, 120);
     });
   },
 
-  onEventInput(e) {
+  openStudentEditor(e) {
     const index = Number(e.currentTarget.dataset.index);
-    const value = e.detail.value;
-    const records = this.data.records.slice();
-    records[index] = { ...records[index], note: value, eventWidth: textWidthRpx(value, 54, 210) };
-    this.setData({ records }, () => {
-      this.refreshSummary();
-      this.queueAutoSave(index, 900);
+    const rec = this.data.records[index];
+    if (!rec) return;
+    this.setData({
+      classSearchOpen: false,
+      addOpen: false,
+      editorOpen: true,
+      editorIndex: index,
+      editor: {
+        ...rec,
+        shopping_amount_text: rec.shopping_amount ? String(rec.shopping_amount) : ""
+      }
     });
   },
 
-  onEventFocus() {
-    this.cleanupEmptyShoppingEditors(false);
+  closeEditor() {
+    if (!this.data.editorOpen) return;
+    const index = this.data.editorIndex;
+    this.cleanupOneEditorRecord(index, true);
+    this.setData({ editorOpen: false, editorIndex: -1, editor: {} });
   },
 
-  onEventBlur(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    const note = String(e.detail.value || "").trim();
-    const records = this.data.records.slice();
-    records[index] = { ...records[index], note, eventWidth: textWidthRpx(note, 54, 210) };
-    this.setData({ records }, () => {
-      this.refreshSummary();
-      this.queueAutoSave(index, 120);
-    });
-  },
-
-  openShopping(e) {
-    this.cleanupEmptyShoppingEditors(false);
-    const index = Number(e.currentTarget.dataset.index);
-    const records = this.data.records.slice();
-    records[index] = { ...records[index], shoppingOpen: true };
-    this.setData({ records });
-  },
-
-  onShoppingItem(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    const value = e.detail.value;
-    const records = this.data.records.slice();
-    records[index] = { ...records[index], shopping_item: value, shoppingItemWidth: textWidthRpx(value, 58, 150) };
-    this.setData({ records }, () => this.queueAutoSave(index, 900));
-  },
-
-  onShoppingAmount(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    const value = e.detail.value;
-    const records = this.data.records.slice();
-    records[index] = {
-      ...records[index],
-      shopping_amount_text: value,
-      shopping_amount: Number(value || 0),
-      shoppingAmountWidth: textWidthRpx(value, 58, 108)
-    };
-    this.setData({ records }, () => this.queueAutoSave(index, 900));
-  },
-
-  onShoppingBlur(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    setTimeout(() => this.cleanupOneShoppingEditor(index, true), 120);
-  },
-
-  cleanupOneShoppingEditor(index, saveIfNeeded) {
+  updateEditorRecord(patch, delay = 700) {
+    const index = this.data.editorIndex;
     const records = this.data.records.slice();
     const rec = records[index];
     if (!rec) return;
-    const item = String(rec.shopping_item || "").trim();
-    const amount = Number(rec.shopping_amount || 0);
-    const hasValue = Boolean(item || amount);
-    if (hasValue) {
-      records[index] = {
-        ...rec,
-        shoppingOpen: true,
-        shopping_item: item,
-        shopping_amount: amount,
-        shopping_amount_text: amount ? String(amount) : "",
-        shoppingItemWidth: textWidthRpx(item, 58, 150),
-        shoppingAmountWidth: textWidthRpx(amount ? String(amount) : "", 58, 108)
-      };
-      this.setData({ records }, () => {
-        if (saveIfNeeded) this.queueAutoSave(index, 120);
-      });
-      return;
-    }
-
-    const shouldSaveDelete = Boolean(rec._shoppingPersisted) || (this.dirtyPids && this.dirtyPids.has(rec.permanent_id));
-    records[index] = {
-      ...rec,
-      shoppingOpen: false,
-      shopping_item: "",
-      shopping_amount: 0,
-      shopping_amount_text: "",
-      shoppingItemWidth: textWidthRpx("", 58, 150),
-      shoppingAmountWidth: textWidthRpx("", 58, 108)
-    };
-    this.setData({ records }, () => {
-      if (saveIfNeeded && shouldSaveDelete) this.queueAutoSave(index, 120);
+    const next = { ...rec, ...patch };
+    records[index] = next;
+    this.setData({ editor: { ...this.data.editor, ...next } });
+    this.setRecords(records, () => {
+      this.refreshSummary();
+      this.queueAutoSave(index, delay);
     });
   },
 
-  cleanupEmptyShoppingEditors(saveIfNeeded) {
+  onEditorNoteInput(e) {
+    this.updateEditorRecord({ note: e.detail.value }, 800);
+  },
+
+  onEditorShoppingItem(e) {
+    this.updateEditorRecord({ shopping_item: e.detail.value }, 800);
+  },
+
+  onEditorShoppingAmount(e) {
+    const value = e.detail.value;
+    this.updateEditorRecord({
+      shopping_amount_text: value,
+      shopping_amount: Number(value || 0)
+    }, 800);
+  },
+
+  cleanupOneEditorRecord(index, saveIfNeeded) {
     const records = this.data.records.slice();
-    const saveIndexes = [];
-    let changed = false;
-    records.forEach((rec, index) => {
-      if (!rec || !rec.shoppingOpen) return;
-      const item = String(rec.shopping_item || "").trim();
-      const amount = Number(rec.shopping_amount || 0);
-      if (item || amount) return;
-      const shouldSaveDelete = Boolean(rec._shoppingPersisted) || (this.dirtyPids && this.dirtyPids.has(rec.permanent_id));
-      records[index] = {
-        ...rec,
-        shoppingOpen: false,
-        shopping_item: "",
-        shopping_amount: 0,
-        shopping_amount_text: "",
-        shoppingItemWidth: textWidthRpx("", 58, 150),
-        shoppingAmountWidth: textWidthRpx("", 58, 108)
-      };
-      changed = true;
-      if (saveIfNeeded && shouldSaveDelete) saveIndexes.push(index);
+    const rec = records[index];
+    if (!rec) return;
+    const note = String(rec.note || "").trim();
+    const item = String(rec.shopping_item || "").trim();
+    const amount = Number(rec.shopping_amount || 0);
+    const shouldSaveDelete = Boolean(rec._shoppingPersisted) || (this.dirtyPids && this.dirtyPids.has(rec.permanent_id));
+    records[index] = {
+      ...rec,
+      note,
+      shopping_item: item,
+      shopping_amount: amount,
+      shopping_amount_text: amount ? String(amount) : ""
+    };
+    this.setRecords(records, () => {
+      this.refreshSummary();
+      if (saveIfNeeded && (note || item || amount || shouldSaveDelete)) this.queueAutoSave(index, 120);
     });
-    if (!changed) return;
-    this.setData({ records }, () => {
-      saveIndexes.forEach((index) => this.queueAutoSave(index, 120));
+  },
+
+  openAddStudent() {
+    const defaultClass = this.data.selectedGrade !== "__all__"
+      ? `${this.data.selectedGrade}-${this.data.selectedClassNo}`
+      : "";
+    this.setData({
+      addOpen: true,
+      editorOpen: false,
+      classSearchOpen: false,
+      addForm: {
+        class_text: defaultClass,
+        name: ""
+      }
     });
+  },
+
+  closeAddStudent() {
+    this.setData({ addOpen: false });
+  },
+
+  onAddClassInput(e) {
+    this.setData({ "addForm.class_text": e.detail.value });
+  },
+
+  onAddNameInput(e) {
+    this.setData({ "addForm.name": e.detail.value });
+  },
+
+  async submitAddStudent() {
+    const form = this.data.addForm;
+    if (!String(form.class_text || "").trim() || !String(form.name || "").trim()) {
+      wx.showToast({ title: "班级和姓名必填", icon: "none" });
+      return;
+    }
+    try {
+      const data = await request("/api/students", {
+        method: "POST",
+        data: {
+          class_text: form.class_text,
+          name: form.name
+        }
+      });
+      const student = data.student || {};
+      const key = `${student.grade}|${student.class_no}`;
+      this.setData({
+        addOpen: false,
+        selectedClassKey: key,
+        selectedGrade: String(student.grade || ""),
+        selectedClassNo: String(student.class_no || ""),
+        selectedClassLabel: formatClassLabel(String(student.grade || ""), String(student.class_no || "")),
+        classSearchText: formatClassLabel(String(student.grade || ""), String(student.class_no || ""))
+      });
+      await this.loadClasses();
+      await this.loadAttendance();
+      wx.showToast({ title: "新人已加入", icon: "success" });
+    } catch (err) {
+      wx.showToast({ title: err.message || "添加失败", icon: "none" });
+    }
   },
 
   queueAutoSave(index, delay = 600, retry = 0) {
@@ -497,7 +498,7 @@ Page({
           ...records[latestIndex],
           _shoppingPersisted: Boolean(payload.shopping_item || Number(payload.shopping_amount || 0))
         };
-        this.setData({ records });
+        this.setRecords(records);
       }
       if (seq === this.autoSaveSeq) {
         this.setData({ autoSaveText: "已保存" });
@@ -517,31 +518,6 @@ Page({
         const latestIndex = this.data.records.findIndex((item) => item.permanent_id === pid);
         if (latestIndex >= 0) this.queueAutoSave(latestIndex, 180);
       }
-    }
-  },
-
-  async saveAttendance() {
-    this.cleanupEmptyShoppingEditors(true);
-    this.flushAutoSaves();
-    const notReady = this.data.records.some((r) => !recordReadyForAutoSave(r));
-    if (notReady) {
-      wx.showToast({ title: "请补全购物", icon: "none" });
-      return;
-    }
-    this.setData({ saving: true });
-    try {
-      const records = this.data.records.map(buildRecordPayload);
-      await request("/api/attendance/bulk", {
-        method: "POST",
-        data: { date: this.data.date, records, generate_report: true },
-        timeout: 15000
-      });
-      wx.showToast({ title: "日报已生成", icon: "success" });
-      this.loadAttendance();
-    } catch (err) {
-      wx.showToast({ title: err.message || "生成失败", icon: "none" });
-    } finally {
-      this.setData({ saving: false });
     }
   }
 });

@@ -1,12 +1,15 @@
-<view class="page">
-  <view class="top-card">
+<view class="page" bindtap="closeTransient">
+  <view wx:if="{{classSearchOpen || editorOpen || addOpen}}" class="screen-mask" bindtap="closeTransient"></view>
+
+  <view class="top-card" catchtap="stopTap">
     <view class="first-line">
+      <view class="add-btn" bindtap="openAddStudent">＋</view>
       <picker mode="date" value="{{date}}" bindchange="onDateChange">
         <view class="date-pill">{{date}}</view>
       </picker>
-      <view class="metric">A {{summary.a}}</view>
-      <view class="metric">P {{summary.p}}</view>
-      <view class="metric">全天 {{summary.fullDay}}</view>
+      <view class="metric a">A {{summary.a}}</view>
+      <view class="metric p">P {{summary.p}}</view>
+      <view class="metric full">全天 {{summary.fullDay}}</view>
     </view>
 
     <view class="class-search-wrap">
@@ -15,14 +18,13 @@
         <input
           class="class-search-input"
           value="{{classSearchText}}"
-          placeholder="搜索班级，如 1.1 / 1-1"
+          placeholder="搜索班级，如 1-1 / 1.1"
           bindfocus="onClassSearchFocus"
           bindinput="onClassSearchInput"
         />
-        <view wx:if="{{classSearchOpen}}" class="search-close" bindtap="closeClassSearch">收起</view>
       </view>
 
-      <view wx:if="{{classSearchOpen}}" class="class-dropdown">
+      <scroll-view wx:if="{{classSearchOpen}}" scroll-y="true" class="class-dropdown" catchtap="stopTap">
         <view
           wx:for="{{filteredClasses}}"
           wx:key="key"
@@ -34,101 +36,90 @@
           <text>{{item.count}}人</text>
         </view>
         <view wx:if="{{!filteredClasses.length}}" class="no-class">没有找到这个班级</view>
-      </view>
+      </scroll-view>
     </view>
 
     <view class="third-line">
-      <text>全部人数 {{totalStudentCount}}</text>
+      <text>总 {{totalStudentCount}}</text>
       <text>当前 {{records.length}}</text>
       <text class="save-state {{autoSaveText === '保存失败' ? 'bad' : ''}}">{{loading ? '载入中' : (autoSaveText || '自动保存')}}</text>
       <view wx:if="{{isAdmin}}" class="admin-link" bindtap="goAdmin">管理</view>
     </view>
   </view>
 
-  <view wx:if="{{viewMode === 'roster'}}" class="roster-card">
-    <view class="sheet-header">
-      <view class="student-col">学生</view>
-      <view class="event-col">事件</view>
-      <view class="shop-col">购物</view>
-      <view class="ap-col">考勤</view>
-    </view>
+  <view class="roster-card" catchtap="stopTap">
+    <view class="roster-grid">
+      <view wx:for="{{records}}" wx:key="permanent_id" class="student-tile {{item.note ? 'has-event' : ''}} {{item.shopping_item || item.shopping_amount ? 'has-shopping' : ''}}">
+        <view wx:if="{{item.showClassHeader}}" class="class-header">{{item.grade}}-{{item.class_no}}</view>
 
-    <view wx:for="{{records}}" wx:key="permanent_id" class="student-item {{item.note ? 'has-event' : ''}}">
-      <view class="sheet-row">
-        <view class="student-col name-cell">
-          <text class="name">{{item.seq_in_class}}. {{item.name}}</text>
-          <text class="class-tag">{{item.grade}}-{{item.class_no}}</text>
+        <view class="name-zone" data-index="{{index}}" bindtap="openStudentEditor">
+          <view class="avatar">{{item.name_initial}}</view>
+          <view class="name-lines">
+            <text class="name">{{item.seq_in_class}}. {{item.name}}</text>
+            <view class="mini-tags">
+              <text wx:if="{{item.note}}" class="tag event">事件</text>
+              <text wx:if="{{item.shopping_item || item.shopping_amount}}" class="tag shop">购 ¥{{item.shopping_amount}}</text>
+            </view>
+          </view>
         </view>
 
-        <input
-          class="event-col event-input"
-          value="{{item.note}}"
-          placeholder=""
-          data-index="{{index}}"
-          bindfocus="onEventFocus"
-          bindinput="onEventInput"
-          bindblur="onEventBlur"
-        />
-
-        <view class="shop-col shop-trigger {{item.shopping_item || item.shopping_amount ? 'filled' : ''}}" data-index="{{index}}" bindtap="openShopping">
-          <text wx:if="{{item.shopping_item || item.shopping_amount}}">¥{{item.shopping_amount}}</text>
-        </view>
-
-        <view class="ap-col ap-cell">
+        <view class="ap-cell">
           <view
-            class="ap-btn {{item.lunch_status === 'present' ? 'active' : ''}}"
+            class="ap-btn a {{item.lunch_status === 'present' ? 'active' : ''}}"
             data-index="{{index}}"
             data-field="lunch_status"
             bindtap="toggleAP"
           >A</view>
           <view
-            class="ap-btn {{item.care_status === 'present' ? 'active' : ''}}"
+            class="ap-btn p {{item.care_status === 'present' ? 'active' : ''}}"
             data-index="{{index}}"
             data-field="care_status"
             bindtap="toggleAP"
           >P</view>
         </view>
       </view>
-
-      <view wx:if="{{item.shoppingOpen}}" class="shopping-panel">
-        <text class="panel-label">购物</text>
-        <input
-          class="shop-input item"
-          placeholder="物品"
-          value="{{item.shopping_item}}"
-          data-index="{{index}}"
-          bindinput="onShoppingItem"
-          bindblur="onShoppingBlur"
-        />
-        <input
-          class="shop-input amount"
-          placeholder="金额"
-          type="digit"
-          value="{{item.shopping_amount_text}}"
-          data-index="{{index}}"
-          bindinput="onShoppingAmount"
-          bindblur="onShoppingBlur"
-        />
-      </view>
     </view>
 
     <view wx:if="{{!records.length && !loading}}" class="empty">当前班级暂无学生。</view>
   </view>
 
-  <view wx:else class="absent-card">
-    <view class="absent-title">
-      <text>未到提醒</text>
-      <view class="back-link" bindtap="showRoster">返回点名</view>
-    </view>
-    <view wx:if="{{!absentRecords.length}}" class="empty">当前班级没有未到学生。</view>
-    <view wx:for="{{absentRecords}}" wx:key="permanent_id" class="absent-row">
+  <view wx:if="{{editorOpen}}" class="floating-panel editor-panel" catchtap="stopTap">
+    <view class="panel-head">
       <view>
-        <text class="name">{{item.name}}</text>
-        <text class="class-tag">{{item.grade}}-{{item.class_no}}</text>
+        <text class="panel-title">{{editor.name}}</text>
+        <text class="panel-sub">{{editor.grade}}-{{editor.class_no}}　{{editor.permanent_id}}</text>
       </view>
-      <text>{{item.lunch_status === 'present' ? 'A到' : 'A未到'}}</text>
-      <text>{{item.care_status === 'present' ? 'P到' : 'P未到'}}</text>
-      <text class="note">{{item.note}}</text>
+      <view class="panel-close" bindtap="closeEditor">×</view>
+    </view>
+    <view class="field-title">事件提醒</view>
+    <textarea
+      class="event-textarea"
+      value="{{editor.note}}"
+      placeholder="没有就留空"
+      maxlength="120"
+      bindinput="onEditorNoteInput"
+    />
+    <view class="field-title">购物</view>
+    <view class="shop-grid">
+      <input class="shop-input" value="{{editor.shopping_item}}" placeholder="物品" bindinput="onEditorShoppingItem" />
+      <input class="shop-input amount" type="digit" value="{{editor.shopping_amount_text}}" placeholder="金额" bindinput="onEditorShoppingAmount" />
+    </view>
+    <view class="panel-hint">点击空白处关闭，内容会自动保存。</view>
+  </view>
+
+  <view wx:if="{{addOpen}}" class="floating-panel add-panel" catchtap="stopTap">
+    <view class="panel-head">
+      <view>
+        <text class="panel-title">添加新人</text>
+        <text class="panel-sub">填写班级和姓名，保存后立刻可点名</text>
+      </view>
+      <view class="panel-close" bindtap="closeAddStudent">×</view>
+    </view>
+    <input class="add-input" value="{{addForm.class_text}}" placeholder="班级，例如 1-1 / 1.1" bindinput="onAddClassInput" />
+    <input class="add-input" value="{{addForm.name}}" placeholder="学生姓名" bindinput="onAddNameInput" />
+    <view class="add-actions">
+      <view class="ghost-action" bindtap="closeAddStudent">取消</view>
+      <view class="primary-action" bindtap="submitAddStudent">保存</view>
     </view>
   </view>
 </view>

@@ -43,11 +43,31 @@
     </view>
     <view class="list">
       <view wx:for="{{students}}" wx:key="permanent_id" class="list-row {{selectedStudent.permanent_id === item.permanent_id ? 'active' : ''}}" data-pid="{{item.permanent_id}}" bindtap="selectStudent">
+        <view class="student-avatar" data-pid="{{item.permanent_id}}" catchtap="openStudentReport">{{item.name_initial}}</view>
         <view>
           <text class="row-title">{{item.name}}</text>
           <text class="row-sub">{{item.grade}}-{{item.class_no}}　{{item.permanent_id}}</text>
         </view>
         <text class="row-money">¥{{item.current_balance || 0}}</text>
+      </view>
+    </view>
+    <view wx:if="{{studentReportOpen}}" class="student-report-card">
+      <view class="trace-row-head">
+        <view>
+          <text class="row-title">{{studentReport.name}} 学生明细</text>
+          <text class="row-sub">{{studentReport.grade}}-{{studentReport.class_no}}　{{studentReport.permanent_id}}</text>
+        </view>
+        <view class="panel-close" bindtap="closeStudentReport">×</view>
+      </view>
+      <view class="mini-stat-grid">
+        <view><text>本月 A</text><text>{{studentReport.lunch_present_days || 0}} 天</text></view>
+        <view><text>本月 P</text><text>{{studentReport.care_present_days || 0}} 天</text></view>
+        <view><text>期初余额</text><text>¥{{studentReport.opening_balance || 0}}</text></view>
+        <view><text>学生编号</text><text>{{studentReport.annual_id}}</text></view>
+      </view>
+      <view class="action-grid">
+        <view class="primary-action" data-type="student" bindtap="generateReport">生成学生 PDF</view>
+        <view class="small-action" bindtap="closeStudentReport">关闭</view>
       </view>
     </view>
   </view>
@@ -123,27 +143,21 @@
 
   <view wx:if="{{active === 'reports'}}" class="section">
     <view class="card">
-      <text class="card-title">生成报表</text>
+      <text class="card-title">{{reportTitle}}</text>
       <picker mode="date" value="{{date}}" bindchange="onDateChange"><view class="field">日报日期：{{date}}</view></picker>
-      <view class="student-report-box">
-        <view class="field-title">学生明细对象</view>
-        <view class="report-search-line">
-          <input class="report-student-input" value="{{reportStudentSearchText}}" placeholder="搜索学生姓名/班级" bindfocus="onReportStudentFocus" bindinput="onReportStudentInput" />
-          <view wx:if="{{reportStudentOpen}}" class="search-close" bindtap="closeReportStudentSearch">收起</view>
-        </view>
-        <view wx:if="{{reportStudentOpen}}" class="report-student-dropdown">
-          <view wx:for="{{filteredReportStudents}}" wx:key="permanent_id" class="report-student-option {{reportStudent.permanent_id === item.permanent_id ? 'active' : ''}}" data-pid="{{item.permanent_id}}" bindtap="selectReportStudent">
-            <text>{{item.name}}</text>
-            <text>{{item.grade}}-{{item.class_no}}</text>
-          </view>
-          <view wx:if="{{!filteredReportStudents.length}}" class="no-class">没有找到学生</view>
-        </view>
+      <view class="report-summary">
+        <view><text>A 人数</text><text>{{reportSummary.a_count || 0}} 人</text></view>
+        <view><text>A 预计</text><text>¥{{reportSummary.a_amount || 0}}</text></view>
+        <view><text>P 人数</text><text>{{reportSummary.p_count || 0}} 人</text></view>
+        <view><text>P 预计</text><text>¥{{reportSummary.p_amount || 0}}</text></view>
+        <view><text>全天</text><text>{{reportSummary.full_day_count || 0}} 人</text></view>
+        <view><text>购物</text><text>¥{{reportSummary.shopping_total || 0}}</text></view>
+        <view class="total"><text>{{reportTotalLabel}}</text><text>¥{{reportSummary.total || 0}}</text></view>
       </view>
-      <view class="action-grid">
-        <view class="primary-action" data-type="daily" bindtap="generateReport">当日日报</view>
-        <view class="primary-action" data-type="monthly" bindtap="generateReport">月报</view>
-        <view class="primary-action" data-type="costs" bindtap="generateReport">成本报表</view>
-        <view class="primary-action" data-type="student" bindtap="generateReport">学生明细</view>
+      <view class="report-links">
+        <view class="{{reportScope === 'daily' ? 'active' : ''}}" data-scope="daily" bindtap="loadReportSummary">本日报表</view>
+        <view class="{{reportScope === 'week' ? 'active' : ''}}" data-scope="week" bindtap="loadReportSummary">本周总结</view>
+        <view class="{{reportScope === 'month' ? 'active' : ''}}" data-scope="month" bindtap="loadReportSummary">月报表</view>
       </view>
     </view>
   </view>

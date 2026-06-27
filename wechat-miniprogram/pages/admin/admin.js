@@ -37,6 +37,13 @@ function filterStudents(students, query) {
   return students.filter((item) => studentSearchText(item).includes(q));
 }
 
+function decorateStudents(students) {
+  return (students || []).map((item) => {
+    const chars = Array.from(String(item.name || "").trim());
+    return { ...item, name_initial: chars.length ? chars[0] : "生" };
+  });
+}
+
 Page({
   data: {
     month: currentMonth(),
@@ -99,6 +106,12 @@ Page({
     reportStudentSearchText: "",
     reportStudentOpen: false,
     filteredReportStudents: [],
+    studentReportOpen: false,
+    studentReport: {},
+    reportScope: "daily",
+    reportSummary: {},
+    reportTitle: "本日报表",
+    reportTotalLabel: "本日预计总金额",
     traceDate: today(),
     traceQuery: "",
     traceGrade: "",
@@ -129,15 +142,21 @@ Page({
     const key = e.currentTarget.dataset.key;
     this.setData({ active: key }, () => {
       if (key === "trace") this.loadTrace();
+      if (key === "reports") this.loadReportSummary();
     });
   },
 
   onMonthChange(e) {
-    this.setData({ month: e.detail.value }, () => this.refreshAll());
+    this.setData({ month: e.detail.value }, () => {
+      this.refreshAll();
+      if (this.data.active === "reports") this.loadReportSummary(this.data.reportScope);
+    });
   },
 
   onDateChange(e) {
-    this.setData({ date: e.detail.value });
+    this.setData({ date: e.detail.value }, () => {
+      if (this.data.active === "reports") this.loadReportSummary(this.data.reportScope);
+    });
   },
 
   async refreshAll() {
@@ -154,9 +173,10 @@ Page({
         request("/api/settings")
       ]);
       const settingMap = settings.settings || {};
+      const studentRows = decorateStudents(students.students || []);
       this.setData({
         dashboard: dashboard.dashboard || {},
-        students: students.students || [],
+        students: studentRows,
         payments: payments.payments || [],
         settlements: settlements.rows || [],
         costs: costs.rows || [],
@@ -170,15 +190,16 @@ Page({
           teacher: settingMap.monthly_labor_teacher || "",
           salary: settingMap.monthly_labor_salary || ""
         },
-        filteredReportStudents: filterStudents(students.students || [], this.data.reportStudentSearchText)
+        filteredReportStudents: filterStudents(studentRows, this.data.reportStudentSearchText)
       });
-      if (!this.data.selectedStudent && (students.students || []).length) {
+      if (!this.data.selectedStudent && studentRows.length) {
         this.setData({
-          selectedStudent: students.students[0],
-          reportStudent: students.students[0],
-          reportStudentSearchText: students.students[0].name
+          selectedStudent: studentRows[0],
+          reportStudent: studentRows[0],
+          reportStudentSearchText: studentRows[0].name
         });
       }
+      if (this.data.active === "reports") this.loadReportSummary(this.data.reportScope);
     } catch (err) {
       wx.showToast({ title: err.message || "后台载入失败", icon: "none" });
     } finally {
@@ -193,7 +214,7 @@ Page({
   async searchStudents() {
     try {
       const data = await request(`/api/students?q=${encodeURIComponent(this.data.studentQuery || "")}`);
-      this.setData({ students: data.students || [] });
+      this.setData({ students: decorateStudents(data.students || []) });
     } catch (err) {
       wx.showToast({ title: err.message || "学生搜索失败", icon: "none" });
     }
@@ -204,6 +225,22 @@ Page({
     const student = this.data.students.find((item) => item.permanent_id === pid);
     if (!student) return;
     this.setData({ selectedStudent: student, reportStudent: student });
+  },
+
+  openStudentReport(e) {
+    const pid = e.currentTarget.dataset.pid;
+    const student = this.data.students.find((item) => item.permanent_id === pid);
+    if (!student) return;
+    this.setData({
+      selectedStudent: student,
+      reportStudent: student,
+      studentReport: student,
+      studentReportOpen: true
+    });
+  },
+
+  closeStudentReport() {
+    this.setData({ studentReportOpen: false, studentReport: {} });
   },
 
   onPaymentMethod(e) {
@@ -354,6 +391,39 @@ Page({
     }
   },
 
+  async loadReportSummary(eOrScope) {
+    const scope = typeof eOrScope === "string"
+      ? eOrScope
+      : (eOrScope && eOrScope.currentTarget ? eOrScope.currentTarget.dataset.scope : this.data.reportScope);
+    const finalScope = scope || "daily";
+    const params = [
+      `scope=${encodeURIComponent(finalScope)}`,
+      `date=${encodeURIComponent(this.data.date)}`,
+      `month=${encodeURIComponent(this.data.month)}`
+    ].join("&");
+    try {
+      const data = await request(`/api/reports/summary?${params}`);
+      const titleMap = {
+        daily: "本日报表",
+        week: "本周总结",
+        month: "月报表"
+      };
+      const totalMap = {
+        daily: "本日预计总金额",
+        week: "本周预计总金额",
+        month: "本月预计总金额"
+      };
+      this.setData({
+        reportScope: finalScope,
+        reportSummary: data.summary || {},
+        reportTitle: titleMap[finalScope] || "本日报表",
+        reportTotalLabel: totalMap[finalScope] || "预计总金额"
+      });
+    } catch (err) {
+      wx.showToast({ title: err.message || "报表载入失败", icon: "none" });
+    }
+  },
+
   async generateReport(e) {
     const type = e.currentTarget.dataset.type;
     const paths = {
@@ -366,11 +436,12 @@ Page({
       ? { date: this.data.date }
       : { month: this.data.month };
     if (type === "student") {
-      if (!this.data.reportStudent) {
+      const student = this.data.studentReport.permanent_id ? this.data.studentReport : this.data.reportStudent;
+      if (!student) {
         wx.showToast({ title: "先选择学生", icon: "none" });
         return;
       }
-      data.permanent_id = this.data.reportStudent.permanent_id;
+      data.permanent_id = student.permanent_id;
     }
     wx.showLoading({ title: "生成中" });
     try {
