@@ -1,53 +1,141 @@
 <view class="page">
-  <view class="hero">
+  <view class="admin-head">
     <view>
-      <text class="eyebrow">管理员中心</text>
-      <text class="title">优贝思经营总览</text>
+      <text class="eyebrow">管理员后台</text>
+      <text class="title">优贝思经营管理</text>
     </view>
     <picker mode="date" fields="month" value="{{month}}" bindchange="onMonthChange">
-      <view class="month">{{month}}</view>
+      <view class="month-pill">{{month}}</view>
     </picker>
   </view>
 
-  <view class="stats">
-    <view class="stat">
-      <text class="num">{{dashboard.students_count}}</text>
-      <text class="label">学生</text>
+  <scroll-view class="tabs" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+    <view class="tab-track">
+      <view
+        wx:for="{{sections}}"
+        wx:key="key"
+        class="tab {{active === item.key ? 'active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="switchSection"
+      >{{item.label}}</view>
     </view>
-    <view class="stat">
-      <text class="num">{{dashboard.attendance_records}}</text>
-      <text class="label">考勤</text>
+  </scroll-view>
+
+  <view wx:if="{{active === 'dashboard'}}" class="section">
+    <view class="stat-grid">
+      <view class="stat"><text class="num">{{dashboard.students_count || 0}}</text><text>学生</text></view>
+      <view class="stat"><text class="num">{{dashboard.attendance_records || 0}}</text><text>考勤</text></view>
+      <view class="stat"><text class="num">{{dashboard.debt_count || 0}}</text><text>欠费人数</text></view>
+      <view class="stat"><text class="num">¥{{dashboard.debt_total || 0}}</text><text>欠费合计</text></view>
     </view>
-    <view class="stat">
-      <text class="num">¥{{dashboard.payment_sum}}</text>
-      <text class="label">充值</text>
-    </view>
-    <view class="stat danger">
-      <text class="num">{{dashboard.debt_count}}</text>
-      <text class="label">欠费人数</text>
+    <view class="money-card">
+      <view><text>本月充值</text><text>¥{{dashboard.payment_sum || 0}}</text></view>
+      <view><text>本月应缴</text><text>¥{{dashboard.total_due || 0}}</text></view>
+      <view><text>购物合计</text><text>¥{{dashboard.shopping_total || 0}}</text></view>
+      <view><text>已月结</text><text>{{dashboard.settled_count || 0}}人</text></view>
     </view>
   </view>
 
-  <view class="money-card">
-    <view>
-      <text class="money-label">本月应缴</text>
-      <text class="money">¥{{dashboard.total_due}}</text>
+  <view wx:if="{{active === 'students'}}" class="section">
+    <view class="search-row">
+      <input class="search-input" value="{{studentQuery}}" placeholder="搜索学生/班级" bindinput="onStudentSearch" />
+      <view class="small-action" bindtap="searchStudents">搜索</view>
     </view>
-    <view>
-      <text class="money-label">欠费合计</text>
-      <text class="money red">¥{{dashboard.debt_total}}</text>
-    </view>
-    <view>
-      <text class="money-label">购物合计</text>
-      <text class="money">¥{{dashboard.shopping_total}}</text>
+    <view class="list">
+      <view wx:for="{{students}}" wx:key="permanent_id" class="list-row {{selectedStudent.permanent_id === item.permanent_id ? 'active' : ''}}" data-pid="{{item.permanent_id}}" bindtap="selectStudent">
+        <view>
+          <text class="row-title">{{item.name}}</text>
+          <text class="row-sub">{{item.grade}}-{{item.class_no}}　{{item.permanent_id}}</text>
+        </view>
+        <text class="row-money">¥{{item.current_balance || 0}}</text>
+      </view>
     </view>
   </view>
 
-  <view class="module-grid">
-    <view wx:for="{{modules}}" wx:key="key" class="module" data-key="{{item.key}}" bindtap="onModuleTap">
-      <text class="module-title">{{item.title}}</text>
-      <text class="module-desc">{{item.desc}}</text>
-      <text class="module-status">{{item.status}}</text>
+  <view wx:if="{{active === 'payments'}}" class="section">
+    <view class="card">
+      <text class="card-title">充值登记</text>
+      <view class="chosen">学生：{{selectedStudent.name || '请在学生页选择'}}</view>
+      <picker mode="date" value="{{date}}" bindchange="onDateChange"><view class="field">日期：{{date}}</view></picker>
+      <input class="field-input" type="digit" value="{{paymentForm.amount}}" placeholder="充值金额" bindinput="onPaymentAmount" />
+      <picker range="{{paymentMethods}}" value="{{paymentMethodIndex}}" bindchange="onPaymentMethod"><view class="field">方式：{{paymentMethods[paymentMethodIndex]}}</view></picker>
+      <input wx:if="{{paymentMethods[paymentMethodIndex] === '其它'}}" class="field-input" value="{{paymentForm.customMethod}}" placeholder="其它支付方式" bindinput="onPaymentCustomMethod" />
+      <input class="field-input" value="{{paymentForm.note}}" placeholder="备注" bindinput="onPaymentNote" />
+      <view class="primary-action" bindtap="submitPayment">保存充值</view>
+    </view>
+    <view class="list compact">
+      <view wx:for="{{payments}}" wx:key="id" class="list-row">
+        <view><text class="row-title">{{item.name}} ¥{{item.amount}}</text><text class="row-sub">{{item.payment_date}} {{item.method}} {{item.note}}</text></view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{active === 'settlement'}}" class="section">
+    <view class="card">
+      <text class="card-title">{{month}} 月底结算</text>
+      <view class="primary-action" bindtap="generateSettlement">生成/刷新月结</view>
+    </view>
+    <view class="list compact">
+      <view wx:for="{{settlements}}" wx:key="permanent_id" class="list-row">
+        <view>
+          <text class="row-title">{{item.name}}　应缴 ¥{{item.total_due}}</text>
+          <text class="row-sub">余额 ¥{{item.ending_balance}}　充值 ¥{{item.recharge_amount}}　购物 ¥{{item.shopping_fee}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{active === 'costs'}}" class="section">
+    <view class="card">
+      <text class="card-title">成本记录</text>
+      <picker mode="date" value="{{date}}" bindchange="onDateChange"><view class="field">日期：{{date}}</view></picker>
+      <picker range="{{costTypes}}" range-key="label" value="{{costTypeIndex}}" bindchange="onCostType"><view class="field">类型：{{costTypes[costTypeIndex].label}}</view></picker>
+      <input class="field-input" value="{{costForm.item}}" placeholder="项目，如房租/肉/水果/人工" bindinput="onCostItem" />
+      <input class="field-input" type="digit" value="{{costForm.amount}}" placeholder="金额" bindinput="onCostAmount" />
+      <input class="field-input" value="{{costForm.note}}" placeholder="备注" bindinput="onCostNote" />
+      <view class="primary-action" bindtap="submitCost">保存成本</view>
+    </view>
+    <view class="money-card">
+      <view><text>固定</text><text>¥{{costSummary.fixed_total || 0}}</text></view>
+      <view><text>食材</text><text>¥{{costSummary.variable_total || 0}}</text></view>
+      <view><text>人工</text><text>¥{{costSummary.labor_total || 0}}</text></view>
+      <view><text>合计</text><text>¥{{costSummary.grand_total || 0}}</text></view>
+    </view>
+    <view class="list compact">
+      <view wx:for="{{costs}}" wx:key="id" class="list-row">
+        <view><text class="row-title">{{item.item}} ¥{{item.amount}}</text><text class="row-sub">{{item.cost_date}} {{item.cost_type_label}} {{item.note}}</text></view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{active === 'reports'}}" class="section">
+    <view class="card">
+      <text class="card-title">生成报表</text>
+      <picker mode="date" value="{{date}}" bindchange="onDateChange"><view class="field">日报日期：{{date}}</view></picker>
+      <view class="action-grid">
+        <view class="primary-action" data-type="daily" bindtap="generateReport">当日日报</view>
+        <view class="primary-action" data-type="monthly" bindtap="generateReport">月报</view>
+        <view class="primary-action" data-type="costs" bindtap="generateReport">成本报表</view>
+        <view class="primary-action" data-type="student" bindtap="generateReport">学生明细</view>
+      </view>
+      <view class="chosen">学生明细对象：{{reportStudent.name || '请在学生页选择'}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{active === 'users'}}" class="section">
+    <view class="card">
+      <text class="card-title">账户管理</text>
+      <input class="field-input" value="{{userForm.username}}" placeholder="用户名" data-field="username" bindinput="onUserField" />
+      <input class="field-input" value="{{userForm.display_name}}" placeholder="显示姓名" data-field="display_name" bindinput="onUserField" />
+      <input class="field-input" value="{{userForm.pin}}" password placeholder="PIN，留空则不改" data-field="pin" bindinput="onUserField" />
+      <picker range="{{userRoles}}" value="{{userRoleIndex}}" bindchange="onUserRole"><view class="field">权限：{{userRoles[userRoleIndex]}}</view></picker>
+      <view class="field" bindtap="toggleUserActive">状态：{{userForm.active ? '启用' : '停用'}}</view>
+      <view class="primary-action" bindtap="submitUser">保存账户</view>
+    </view>
+    <view class="list compact">
+      <view wx:for="{{users}}" wx:key="username" class="list-row">
+        <view><text class="row-title">{{item.display_name}} / {{item.username}}</text><text class="row-sub">{{item.role}}　{{item.active ? '启用' : '停用'}}</text></view>
+      </view>
     </view>
   </view>
 </view>

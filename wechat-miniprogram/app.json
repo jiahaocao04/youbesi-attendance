@@ -1,7 +1,8 @@
 {
   "pages": [
     "pages/login/login",
-    "pages/attendance/attendance"
+    "pages/attendance/attendance",
+    "pages/admin/admin"
   ],
   "window": {
     "navigationBarTitleText": "优贝思点名",

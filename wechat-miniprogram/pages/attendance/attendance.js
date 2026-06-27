@@ -297,11 +297,7 @@ Page({
   },
 
   goAdmin() {
-    wx.showModal({
-      title: "管理员后台",
-      content: "管理员后台会放充值、月结、报表、成本、账户等功能；当前先保留入口，不影响老师点名预览。",
-      showCancel: false
-    });
+    wx.navigateTo({ url: "/pages/admin/admin" });
   },
 
   toggleAP(e) {
