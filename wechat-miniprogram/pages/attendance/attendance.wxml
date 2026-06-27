@@ -1,58 +1,137 @@
 <view class="page">
-  <view class="top panel">
-    <view class="row">
+  <view class="top-card">
+    <picker mode="selector" range="{{classPickerRange}}" value="{{selectedClassIndex}}" bindchange="onClassPickerChange">
+      <view class="class-select">
+        <view>
+          <text class="select-label">班级选择</text>
+          <text class="select-value">{{selectedClassLabel}} · {{records.length}}人</text>
+        </view>
+        <text class="select-arrow">选择</text>
+      </view>
+    </picker>
+
+    <scroll-view class="class-rail" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
+      <view class="class-track">
+        <view
+          wx:for="{{classes}}"
+          wx:key="key"
+          class="class-chip {{selectedClassKey === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="onClassTap"
+        >
+          <text>{{item.label}}</text>
+          <text class="class-count">{{item.count}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="date-line">
       <picker mode="date" value="{{date}}" bindchange="onDateChange">
-        <view class="date">{{date}}</view>
+        <view class="date-pill">{{date}}</view>
       </picker>
-      <button class="danger save" loading="{{saving}}" bindtap="saveAttendance">生成日报</button>
-      <text wx:if="{{autoSaveText}}" class="autosave">{{autoSaveText}}</text>
+      <view class="save-state {{autoSaveText === '保存失败' ? 'bad' : ''}}">
+        {{loading ? '载入中' : (autoSaveText || '自动保存')}}
+      </view>
+      <button class="more-btn" bindtap="toggleMoreActions">更多</button>
     </view>
-    <view class="summary">
+
+    <view class="summary-line">
       <text>A {{summary.a}}</text>
       <text>P {{summary.p}}</text>
       <text>全天 {{summary.fullDay}}</text>
-      <text>未到 {{summary.absent}}</text>
+      <view class="absent-link" bindtap="showAbsent">未到 {{summary.absent}}</view>
     </view>
-    <view class="subtabs">
-      <view class="subtab {{viewMode === 'roster' ? 'active' : ''}}" bindtap="showRoster">点名册</view>
-      <view class="subtab {{viewMode === 'absent' ? 'active' : ''}}" bindtap="showAbsent">未到 {{summary.absent}}</view>
+
+    <view wx:if="{{showMoreActions}}" class="more-panel">
+      <button class="more-action" loading="{{saving}}" bindtap="saveAttendance">生成当日日报</button>
+      <button wx:if="{{isAdmin}}" class="more-action admin" bindtap="goAdmin">管理员功能</button>
     </view>
   </view>
 
-  <view wx:if="{{viewMode === 'roster'}}" class="sheet panel">
-    <view class="header sheet-row">
-      <text>学生</text>
-      <text>事件</text>
-      <text>购物</text>
-      <text>考勤</text>
+  <view wx:if="{{viewMode === 'roster'}}" class="roster-card">
+    <view class="sheet-header">
+      <view class="student-col">学生</view>
+      <view class="event-col">事件</view>
+      <view class="shop-col">购物</view>
+      <view class="ap-col">考勤</view>
     </view>
-    <view wx:for="{{records}}" wx:key="permanent_id" class="sheet-row line {{item.note ? 'has-event' : ''}}">
-      <view class="name">
-        <text class="name-text">{{item.seq_in_class}}. {{item.name}}</text>
-        <text class="code">{{item.grade}}-{{item.class_no}}</text>
-      </view>
-      <input class="mini-input event-input" style="width: {{item.eventWidth}}rpx;" value="{{item.note}}" data-index="{{index}}" bindinput="onEventInput" bindblur="onEventBlur" />
-      <view class="shopping {{item.shoppingOpen || item.shopping_item || item.shopping_amount ? 'open' : ''}}">
-        <button wx:if="{{!item.shoppingOpen && !item.shopping_item && !item.shopping_amount}}" class="blank" data-index="{{index}}" bindtap="openShopping"></button>
-        <view wx:else class="shopping-editor">
-          <input class="mini-input item" style="width: {{item.shoppingItemWidth}}rpx;" placeholder="物品" value="{{item.shopping_item}}" data-index="{{index}}" bindinput="onShoppingItem" bindblur="onShoppingBlur" />
-          <input class="mini-input amount" style="width: {{item.shoppingAmountWidth}}rpx;" placeholder="金额" type="digit" value="{{item.shopping_amount_text}}" data-index="{{index}}" bindinput="onShoppingAmount" bindblur="onShoppingBlur" />
+
+    <view wx:for="{{records}}" wx:key="permanent_id" class="student-item {{item.note ? 'has-event' : ''}}">
+      <view class="sheet-row">
+        <view class="student-col name-cell">
+          <text class="name">{{item.seq_in_class}}. {{item.name}}</text>
+          <text class="class-tag">{{item.grade}}-{{item.class_no}}</text>
+        </view>
+
+        <input
+          class="event-col event-input"
+          value="{{item.note}}"
+          placeholder=""
+          data-index="{{index}}"
+          bindfocus="onEventFocus"
+          bindinput="onEventInput"
+          bindblur="onEventBlur"
+        />
+
+        <view class="shop-col shop-trigger {{item.shopping_item || item.shopping_amount ? 'filled' : ''}}" data-index="{{index}}" bindtap="openShopping">
+          <text wx:if="{{item.shopping_item || item.shopping_amount}}">¥{{item.shopping_amount}}</text>
+        </view>
+
+        <view class="ap-col ap-cell">
+          <button
+            class="ap-btn {{item.lunch_status === 'present' ? 'active' : ''}}"
+            data-index="{{index}}"
+            data-field="lunch_status"
+            bindtap="toggleAP"
+          >A</button>
+          <button
+            class="ap-btn {{item.care_status === 'present' ? 'active' : ''}}"
+            data-index="{{index}}"
+            data-field="care_status"
+            bindtap="toggleAP"
+          >P</button>
         </view>
       </view>
-      <view class="ap">
-        <button class="ap-btn {{item.lunch_status === 'present' ? 'active' : ''}}" data-index="{{index}}" data-field="lunch_status" bindtap="toggleAP">A</button>
-        <button class="ap-btn {{item.care_status === 'present' ? 'active' : ''}}" data-index="{{index}}" data-field="care_status" bindtap="toggleAP">P</button>
+
+      <view wx:if="{{item.shoppingOpen}}" class="shopping-panel">
+        <text class="panel-label">购物</text>
+        <input
+          class="shop-input item"
+          placeholder="物品"
+          value="{{item.shopping_item}}"
+          data-index="{{index}}"
+          bindinput="onShoppingItem"
+          bindblur="onShoppingBlur"
+        />
+        <input
+          class="shop-input amount"
+          placeholder="金额"
+          type="digit"
+          value="{{item.shopping_amount_text}}"
+          data-index="{{index}}"
+          bindinput="onShoppingAmount"
+          bindblur="onShoppingBlur"
+        />
       </view>
     </view>
+
+    <view wx:if="{{!records.length && !loading}}" class="empty">当前班级暂无学生。</view>
   </view>
 
-  <view wx:else class="panel absent">
-    <view wx:if="{{!absentRecords.length}}" class="empty">今天没有未到提醒。</view>
+  <view wx:else class="absent-card">
+    <view class="absent-title">
+      <text>未到提醒</text>
+      <view class="back-link" bindtap="showRoster">返回点名</view>
+    </view>
+    <view wx:if="{{!absentRecords.length}}" class="empty">当前班级没有未到学生。</view>
     <view wx:for="{{absentRecords}}" wx:key="permanent_id" class="absent-row">
-      <text>{{item.name}}</text>
+      <view>
+        <text class="name">{{item.name}}</text>
+        <text class="class-tag">{{item.grade}}-{{item.class_no}}</text>
+      </view>
       <text>{{item.lunch_status === 'present' ? 'A到' : 'A未到'}}</text>
       <text>{{item.care_status === 'present' ? 'P到' : 'P未到'}}</text>
-      <text class="muted">{{item.note}}</text>
+      <text class="note">{{item.note}}</text>
     </view>
   </view>
 </view>

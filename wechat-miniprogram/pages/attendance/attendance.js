@@ -9,27 +9,36 @@ function today() {
   return `${y}-${m}-${day}`;
 }
 
-function textWidthRpx(value, min = 48, max = 220) {
-  const len = Array.from(String(value || "")).length;
+function textWidthRpx(value, min = 54, max = 220) {
+  const len = Array.from(String(value || "").trim()).length;
   if (!len) return min;
-  return Math.min(max, Math.max(min, len * 28 + 28));
+  return Math.min(max, Math.max(min, len * 26 + 34));
+}
+
+function formatClassLabel(grade, classNo) {
+  if (grade === "__all__") return "全部";
+  if (!classNo || classNo === "0") return `${grade}年级`;
+  return `${grade}.${classNo}班`;
 }
 
 function normalizeRecord(r) {
-  const item = r.shopping_item || "";
-  const amountText = Number(r.shopping_amount || 0) ? String(r.shopping_amount) : "";
+  const item = String(r.shopping_item || "").trim();
+  const amount = Number(r.shopping_amount || 0);
+  const amountText = amount ? String(amount) : "";
   return {
     ...r,
     lunch_status: r.lunch_status === "present" ? "present" : "absent",
     care_status: r.care_status === "present" ? "present" : "absent",
-    note: r.note || "",
-    eventWidth: textWidthRpx(r.note || "", 48, 220),
+    bed_status: r.bed_status || "not_used",
+    note: String(r.note || ""),
+    eventWidth: textWidthRpx(r.note || "", 54, 210),
     shopping_item: item,
-    shopping_amount: Number(r.shopping_amount || 0),
+    shopping_amount: amount,
     shopping_amount_text: amountText,
-    shoppingItemWidth: textWidthRpx(item, 54, 150),
-    shoppingAmountWidth: textWidthRpx(amountText, 54, 110),
-    shoppingOpen: Boolean(r.shopping_item || Number(r.shopping_amount || 0))
+    shoppingItemWidth: textWidthRpx(item, 58, 150),
+    shoppingAmountWidth: textWidthRpx(amountText, 58, 108),
+    shoppingOpen: false,
+    _shoppingPersisted: Boolean(item || amount)
   };
 }
 
@@ -47,15 +56,17 @@ function summarize(records) {
 }
 
 function buildRecordPayload(r) {
+  const item = String(r.shopping_item || "").trim();
+  const amount = Number(r.shopping_amount || 0);
   return {
     permanent_id: r.permanent_id,
     lunch_status: r.lunch_status === "present" ? "present" : "absent",
     care_status: r.care_status === "present" ? "present" : "absent",
     bed_status: r.bed_status || "not_used",
-    event_mark: r.note ? 1 : 0,
+    event_mark: String(r.note || "").trim() ? 1 : 0,
     note: String(r.note || "").trim(),
-    shopping_item: String(r.shopping_item || "").trim(),
-    shopping_amount: Number(r.shopping_amount || 0)
+    shopping_item: item,
+    shopping_amount: amount
   };
 }
 
@@ -71,61 +82,162 @@ function recordReadyForAutoSave(r) {
 Page({
   data: {
     date: today(),
+    classes: [{ key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: 0 }],
+    classPickerRange: ["全部"],
+    selectedClassIndex: 0,
+    selectedClassKey: "__all__|__all__",
+    selectedGrade: "__all__",
+    selectedClassNo: "__all__",
+    selectedClassLabel: "全部",
     records: [],
     summary: { a: 0, p: 0, fullDay: 0, absent: 0 },
     absentRecords: [],
     viewMode: "roster",
+    isAdmin: false,
+    showMoreActions: false,
     loading: false,
     saving: false,
     autoSaveText: ""
   },
+
   onLoad() {
     this.autoSaveTimers = {};
     this.dirtyPids = new Set();
     this.savingPids = new Set();
     this.autoSaveSeq = 0;
-    if (!app.globalData.user && !wx.getStorageSync("user")) {
+    const user = app.globalData.user || wx.getStorageSync("user");
+    if (!user) {
       wx.redirectTo({ url: "/pages/login/login" });
       return;
     }
+    this.setData({ isAdmin: user.role === "admin" });
+    this.loadClasses();
     this.loadAttendance();
   },
+
   onHide() {
+    this.cleanupEmptyShoppingEditors(false);
     this.flushAutoSaves();
   },
+
   onUnload() {
+    this.cleanupEmptyShoppingEditors(false);
     this.flushAutoSaves();
   },
+
+  async loadClasses() {
+    try {
+      const data = await request("/api/classes");
+      const raw = data.classes || [];
+      const total = raw.reduce((sum, item) => sum + Number(item.student_count || 0), 0);
+      const classes = [
+        { key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: total },
+        ...raw.map((item) => {
+          const grade = String(item.grade || "");
+          const classNo = String(item.class_no || "");
+          return {
+            key: `${grade}|${classNo}`,
+            grade,
+            class_no: classNo,
+            label: formatClassLabel(grade, classNo),
+            count: Number(item.student_count || 0)
+          };
+        })
+      ];
+      const selectedClassIndex = Math.max(0, classes.findIndex((item) => item.key === this.data.selectedClassKey));
+      this.setData({
+        classes,
+        classPickerRange: classes.map((item) => `${item.label}（${item.count}）`),
+        selectedClassIndex
+      });
+    } catch (err) {
+      wx.showToast({ title: err.message || "班级载入失败", icon: "none" });
+    }
+  },
+
   async loadAttendance() {
     this.setData({ loading: true });
+    const grade = encodeURIComponent(this.data.selectedGrade || "__all__");
+    const classNo = encodeURIComponent(this.data.selectedClassNo || "__all__");
     try {
-      const data = await request(`/api/attendance?date=${this.data.date}&grade=__all__&class_no=__all__`);
+      const data = await request(`/api/attendance?date=${this.data.date}&grade=${grade}&class_no=${classNo}`);
       const records = (data.records || []).map(normalizeRecord);
-      this.setData({ records, autoSaveText: "" }, () => this.refreshSummary());
+      this.setData({ records, viewMode: "roster", autoSaveText: "" }, () => this.refreshSummary());
     } catch (err) {
       wx.showToast({ title: err.message || "载入失败", icon: "none" });
     } finally {
       this.setData({ loading: false });
     }
   },
+
   onDateChange(e) {
+    this.cleanupEmptyShoppingEditors(false);
     this.flushAutoSaves();
     this.autoSaveTimers = {};
     this.dirtyPids = new Set();
     this.setData({ date: e.detail.value, viewMode: "roster", autoSaveText: "" }, () => this.loadAttendance());
   },
+
+  onClassTap(e) {
+    const key = e.currentTarget.dataset.key;
+    if (!key || key === this.data.selectedClassKey) return;
+    const index = this.data.classes.findIndex((item) => item.key === key);
+    const selected = this.data.classes[index];
+    if (!selected) return;
+    this.switchClass(selected, index);
+  },
+
+  onClassPickerChange(e) {
+    const index = Number(e.detail.value || 0);
+    const selected = this.data.classes[index];
+    if (!selected) return;
+    this.switchClass(selected, index);
+  },
+
+  switchClass(selected, index) {
+    if (!selected || selected.key === this.data.selectedClassKey) return;
+    this.cleanupEmptyShoppingEditors(false);
+    this.flushAutoSaves();
+    this.autoSaveTimers = {};
+    this.dirtyPids = new Set();
+    this.setData({
+      selectedClassIndex: index,
+      selectedClassKey: selected.key,
+      selectedGrade: selected.grade,
+      selectedClassNo: selected.class_no,
+      selectedClassLabel: selected.label,
+      autoSaveText: "",
+      showMoreActions: false
+    }, () => this.loadAttendance());
+  },
+
   refreshSummary() {
     const summary = summarize(this.data.records);
     const absentRecords = this.data.records.filter((r) => r.lunch_status !== "present" || r.care_status !== "present");
     this.setData({ summary, absentRecords });
   },
+
   showRoster() {
+    this.cleanupEmptyShoppingEditors(false);
     this.setData({ viewMode: "roster" });
   },
+
   showAbsent() {
+    this.cleanupEmptyShoppingEditors(false);
     this.setData({ viewMode: "absent" });
   },
+
+  toggleMoreActions() {
+    this.cleanupEmptyShoppingEditors(false);
+    this.setData({ showMoreActions: !this.data.showMoreActions });
+  },
+
+  goAdmin() {
+    wx.navigateTo({ url: "/pages/admin/admin" });
+  },
+
   toggleAP(e) {
+    this.cleanupEmptyShoppingEditors(false);
     const index = Number(e.currentTarget.dataset.index);
     const field = e.currentTarget.dataset.field;
     const records = this.data.records.slice();
@@ -137,70 +249,133 @@ Page({
       this.queueAutoSave(index, 120);
     });
   },
+
   onEventInput(e) {
     const index = Number(e.currentTarget.dataset.index);
+    const value = e.detail.value;
     const records = this.data.records.slice();
-    records[index] = { ...records[index], note: e.detail.value, eventWidth: textWidthRpx(e.detail.value, 48, 220) };
+    records[index] = { ...records[index], note: value, eventWidth: textWidthRpx(value, 54, 210) };
     this.setData({ records }, () => {
       this.refreshSummary();
       this.queueAutoSave(index, 900);
     });
   },
+
+  onEventFocus() {
+    this.cleanupEmptyShoppingEditors(false);
+  },
+
   onEventBlur(e) {
     const index = Number(e.currentTarget.dataset.index);
     const note = String(e.detail.value || "").trim();
     const records = this.data.records.slice();
-    records[index] = { ...records[index], note, eventWidth: textWidthRpx(note, 48, 220) };
+    records[index] = { ...records[index], note, eventWidth: textWidthRpx(note, 54, 210) };
     this.setData({ records }, () => {
       this.refreshSummary();
       this.queueAutoSave(index, 120);
     });
   },
+
   openShopping(e) {
+    this.cleanupEmptyShoppingEditors(false);
     const index = Number(e.currentTarget.dataset.index);
     const records = this.data.records.slice();
     records[index] = { ...records[index], shoppingOpen: true };
     this.setData({ records });
   },
+
   onShoppingItem(e) {
     const index = Number(e.currentTarget.dataset.index);
+    const value = e.detail.value;
     const records = this.data.records.slice();
-    records[index] = { ...records[index], shopping_item: e.detail.value, shoppingItemWidth: textWidthRpx(e.detail.value, 54, 150) };
+    records[index] = { ...records[index], shopping_item: value, shoppingItemWidth: textWidthRpx(value, 58, 150) };
     this.setData({ records }, () => this.queueAutoSave(index, 900));
   },
+
   onShoppingAmount(e) {
     const index = Number(e.currentTarget.dataset.index);
+    const value = e.detail.value;
     const records = this.data.records.slice();
     records[index] = {
       ...records[index],
-      shopping_amount_text: e.detail.value,
-      shopping_amount: Number(e.detail.value || 0),
-      shoppingAmountWidth: textWidthRpx(e.detail.value, 54, 110)
+      shopping_amount_text: value,
+      shopping_amount: Number(value || 0),
+      shoppingAmountWidth: textWidthRpx(value, 58, 108)
     };
     this.setData({ records }, () => this.queueAutoSave(index, 900));
   },
+
   onShoppingBlur(e) {
     const index = Number(e.currentTarget.dataset.index);
-    setTimeout(() => {
-      const records = this.data.records.slice();
-      const rec = { ...records[index] };
-      const hasValue = String(rec.shopping_item || "").trim() || Number(rec.shopping_amount || 0);
-      if (!hasValue) {
-        records[index] = {
-          ...rec,
-          shoppingOpen: false,
-          shopping_item: "",
-          shopping_amount: 0,
-          shopping_amount_text: "",
-          shoppingItemWidth: textWidthRpx("", 54, 150),
-          shoppingAmountWidth: textWidthRpx("", 54, 110)
-        };
-        this.setData({ records }, () => this.queueAutoSave(index, 120));
-      } else {
-        this.queueAutoSave(index, 120);
-      }
-    }, 120);
+    setTimeout(() => this.cleanupOneShoppingEditor(index, true), 120);
   },
+
+  cleanupOneShoppingEditor(index, saveIfNeeded) {
+    const records = this.data.records.slice();
+    const rec = records[index];
+    if (!rec) return;
+    const item = String(rec.shopping_item || "").trim();
+    const amount = Number(rec.shopping_amount || 0);
+    const hasValue = Boolean(item || amount);
+    if (hasValue) {
+      records[index] = {
+        ...rec,
+        shoppingOpen: true,
+        shopping_item: item,
+        shopping_amount: amount,
+        shopping_amount_text: amount ? String(amount) : "",
+        shoppingItemWidth: textWidthRpx(item, 58, 150),
+        shoppingAmountWidth: textWidthRpx(amount ? String(amount) : "", 58, 108)
+      };
+      this.setData({ records }, () => {
+        if (saveIfNeeded) this.queueAutoSave(index, 120);
+      });
+      return;
+    }
+
+    const shouldSaveDelete = Boolean(rec._shoppingPersisted) || (this.dirtyPids && this.dirtyPids.has(rec.permanent_id));
+    records[index] = {
+      ...rec,
+      shoppingOpen: false,
+      shopping_item: "",
+      shopping_amount: 0,
+      shopping_amount_text: "",
+      shoppingItemWidth: textWidthRpx("", 58, 150),
+      shoppingAmountWidth: textWidthRpx("", 58, 108)
+    };
+    this.setData({ records }, () => {
+      if (saveIfNeeded && shouldSaveDelete) this.queueAutoSave(index, 120);
+    });
+  },
+
+  cleanupEmptyShoppingEditors(saveIfNeeded) {
+    const records = this.data.records.slice();
+    const saveIndexes = [];
+    let changed = false;
+    records.forEach((rec, index) => {
+      if (!rec || !rec.shoppingOpen) return;
+      const item = String(rec.shopping_item || "").trim();
+      const amount = Number(rec.shopping_amount || 0);
+      if (item || amount) return;
+      const shouldSaveDelete = Boolean(rec._shoppingPersisted) || (this.dirtyPids && this.dirtyPids.has(rec.permanent_id));
+      records[index] = {
+        ...rec,
+        shoppingOpen: false,
+        shopping_item: "",
+        shopping_amount: 0,
+        shopping_amount_text: "",
+        shoppingItemWidth: textWidthRpx("", 58, 150),
+        shoppingAmountWidth: textWidthRpx("", 58, 108)
+      };
+      changed = true;
+      if (saveIfNeeded && shouldSaveDelete) saveIndexes.push(index);
+    });
+    if (!changed) return;
+    this.setData({ records }, () => {
+      saveIndexes.forEach((index) => this.queueAutoSave(index, 120));
+    });
+  },
+
   queueAutoSave(index, delay = 600, retry = 0) {
     const rec = this.data.records[index];
     if (!rec || !rec.permanent_id) return;
@@ -219,6 +394,7 @@ Page({
       this.saveOneRecord(currentIndex, retry);
     }, delay);
   },
+
   flushAutoSaves() {
     const pids = Array.from(this.dirtyPids || []);
     pids.forEach((pid) => {
@@ -230,6 +406,7 @@ Page({
       if (index >= 0) this.saveOneRecord(index, 0);
     });
   },
+
   async saveOneRecord(index, retry = 0) {
     const rec = this.data.records[index];
     if (!rec || !recordReadyForAutoSave(rec)) return;
@@ -242,23 +419,32 @@ Page({
     const seq = ++this.autoSaveSeq;
     this.dirtyPids.delete(pid);
     this.savingPids.add(pid);
-    this.setData({ autoSaveText: "自动保存中..." });
+    this.setData({ autoSaveText: "自动保存中" });
     try {
       await request("/api/attendance/bulk", {
         method: "POST",
         data: { date: this.data.date, records: [payload], generate_report: false },
         timeout: 10000
       });
+      const latestIndex = this.data.records.findIndex((item) => item.permanent_id === pid);
+      if (latestIndex >= 0) {
+        const records = this.data.records.slice();
+        records[latestIndex] = {
+          ...records[latestIndex],
+          _shoppingPersisted: Boolean(payload.shopping_item || Number(payload.shopping_amount || 0))
+        };
+        this.setData({ records });
+      }
       if (seq === this.autoSaveSeq) {
-        this.setData({ autoSaveText: "已自动保存" });
+        this.setData({ autoSaveText: "已保存" });
       }
     } catch (err) {
       this.dirtyPids.add(pid);
       if (retry < 2) {
-        this.setData({ autoSaveText: "自动保存重试中..." });
+        this.setData({ autoSaveText: "保存重试中" });
         this.queueAutoSave(index, 1600, retry + 1);
       } else {
-        this.setData({ autoSaveText: "自动保存失败" });
+        this.setData({ autoSaveText: "保存失败" });
         wx.showToast({ title: err.message || "自动保存失败", icon: "none" });
       }
     } finally {
@@ -269,11 +455,13 @@ Page({
       }
     }
   },
+
   async saveAttendance() {
+    this.cleanupEmptyShoppingEditors(true);
     this.flushAutoSaves();
     const notReady = this.data.records.some((r) => !recordReadyForAutoSave(r));
     if (notReady) {
-      wx.showToast({ title: "请补全购物物品和金额", icon: "none" });
+      wx.showToast({ title: "请补全购物", icon: "none" });
       return;
     }
     this.setData({ saving: true });
@@ -284,10 +472,10 @@ Page({
         data: { date: this.data.date, records, generate_report: true },
         timeout: 15000
       });
-      wx.showToast({ title: "已保存", icon: "success" });
+      wx.showToast({ title: "日报已生成", icon: "success" });
       this.loadAttendance();
     } catch (err) {
-      wx.showToast({ title: err.message || "保存失败", icon: "none" });
+      wx.showToast({ title: err.message || "生成失败", icon: "none" });
     } finally {
       this.setData({ saving: false });
     }
