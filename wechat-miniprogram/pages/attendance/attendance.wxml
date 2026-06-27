@@ -1,50 +1,47 @@
 <view class="page">
   <view class="top-card">
-    <picker mode="selector" range="{{classPickerRange}}" value="{{selectedClassIndex}}" bindchange="onClassPickerChange">
-      <view class="class-select">
-        <view>
-          <text class="select-label">班级选择</text>
-          <text class="select-value">{{selectedClassLabel}} · {{records.length}}人</text>
-        </view>
-        <text class="select-arrow">选择</text>
-      </view>
-    </picker>
-
-    <scroll-view class="class-rail" scroll-x="true" enhanced="true" show-scrollbar="{{false}}">
-      <view class="class-track">
-        <view
-          wx:for="{{classes}}"
-          wx:key="key"
-          class="class-chip {{selectedClassKey === item.key ? 'active' : ''}}"
-          data-key="{{item.key}}"
-          bindtap="onClassTap"
-        >
-          <text>{{item.label}}</text>
-          <text class="class-count">{{item.count}}</text>
-        </view>
-      </view>
-    </scroll-view>
-
-    <view class="date-line">
+    <view class="first-line">
       <picker mode="date" value="{{date}}" bindchange="onDateChange">
         <view class="date-pill">{{date}}</view>
       </picker>
-      <view class="save-state {{autoSaveText === '保存失败' ? 'bad' : ''}}">
-        {{loading ? '载入中' : (autoSaveText || '自动保存')}}
+      <view class="metric">A {{summary.a}}</view>
+      <view class="metric">P {{summary.p}}</view>
+      <view class="metric">全天 {{summary.fullDay}}</view>
+    </view>
+
+    <view class="class-search-wrap">
+      <view class="class-search-box">
+        <text class="search-label">班级</text>
+        <input
+          class="class-search-input"
+          value="{{classSearchText}}"
+          placeholder="搜索班级，如 1.1 / 1-1"
+          bindfocus="onClassSearchFocus"
+          bindinput="onClassSearchInput"
+        />
+        <view wx:if="{{classSearchOpen}}" class="search-close" bindtap="closeClassSearch">收起</view>
       </view>
-      <button class="more-btn" bindtap="toggleMoreActions">更多</button>
+
+      <view wx:if="{{classSearchOpen}}" class="class-dropdown">
+        <view
+          wx:for="{{filteredClasses}}"
+          wx:key="key"
+          class="class-option {{selectedClassKey === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="selectClassFromSearch"
+        >
+          <text>{{item.label}}</text>
+          <text>{{item.count}}人</text>
+        </view>
+        <view wx:if="{{!filteredClasses.length}}" class="no-class">没有找到这个班级</view>
+      </view>
     </view>
 
-    <view class="summary-line">
-      <text>A {{summary.a}}</text>
-      <text>P {{summary.p}}</text>
-      <text>全天 {{summary.fullDay}}</text>
-      <view class="absent-link" bindtap="showAbsent">未到 {{summary.absent}}</view>
-    </view>
-
-    <view wx:if="{{showMoreActions}}" class="more-panel">
-      <button class="more-action" loading="{{saving}}" bindtap="saveAttendance">生成当日日报</button>
-      <button wx:if="{{isAdmin}}" class="more-action admin" bindtap="goAdmin">管理员功能</button>
+    <view class="third-line">
+      <text>全部人数 {{totalStudentCount}}</text>
+      <text>当前 {{records.length}}</text>
+      <text class="save-state {{autoSaveText === '保存失败' ? 'bad' : ''}}">{{loading ? '载入中' : (autoSaveText || '自动保存')}}</text>
+      <view wx:if="{{isAdmin}}" class="admin-link" bindtap="goAdmin">管理</view>
     </view>
   </view>
 

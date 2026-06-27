@@ -21,6 +21,25 @@ function formatClassLabel(grade, classNo) {
   return `${grade}.${classNo}班`;
 }
 
+function classSearchText(item) {
+  if (!item) return "";
+  const grade = String(item.grade || "");
+  const classNo = String(item.class_no || "");
+  return [
+    item.label,
+    `${grade}.${classNo}`,
+    `${grade}-${classNo}`,
+    `${grade}年级${classNo}班`,
+    `${grade}年${classNo}班`
+  ].join(" ").toLowerCase();
+}
+
+function filterClasses(classes, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return classes;
+  return classes.filter((item) => classSearchText(item).includes(q));
+}
+
 function normalizeRecord(r) {
   const item = String(r.shopping_item || "").trim();
   const amount = Number(r.shopping_amount || 0);
@@ -84,6 +103,10 @@ Page({
     date: today(),
     classes: [{ key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: 0 }],
     classPickerRange: ["全部"],
+    classSearchText: "全部",
+    classSearchOpen: false,
+    filteredClasses: [{ key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: 0 }],
+    totalStudentCount: 0,
     selectedClassIndex: 0,
     selectedClassKey: "__all__|__all__",
     selectedGrade: "__all__",
@@ -94,7 +117,6 @@ Page({
     absentRecords: [],
     viewMode: "roster",
     isAdmin: false,
-    showMoreActions: false,
     loading: false,
     saving: false,
     autoSaveText: ""
@@ -128,7 +150,7 @@ Page({
   async loadClasses() {
     try {
       const data = await request("/api/classes");
-      const raw = data.classes || [];
+      const raw = (data.classes || []).filter((item) => Number(item.student_count || 0) > 0);
       const total = raw.reduce((sum, item) => sum + Number(item.student_count || 0), 0);
       const classes = [
         { key: "__all__|__all__", grade: "__all__", class_no: "__all__", label: "全部", count: total },
@@ -145,10 +167,14 @@ Page({
         })
       ];
       const selectedClassIndex = Math.max(0, classes.findIndex((item) => item.key === this.data.selectedClassKey));
+      const selected = classes[selectedClassIndex] || classes[0];
       this.setData({
         classes,
         classPickerRange: classes.map((item) => `${item.label}（${item.count}）`),
-        selectedClassIndex
+        filteredClasses: filterClasses(classes, this.data.classSearchText === this.data.selectedClassLabel ? "" : this.data.classSearchText),
+        selectedClassIndex,
+        totalStudentCount: total,
+        classSearchText: selected.label
       });
     } catch (err) {
       wx.showToast({ title: err.message || "班级载入失败", icon: "none" });
@@ -194,8 +220,49 @@ Page({
     this.switchClass(selected, index);
   },
 
+  onClassSearchFocus() {
+    this.setData({
+      classSearchOpen: true,
+      classSearchText: this.data.selectedClassLabel === "全部" ? "" : this.data.selectedClassLabel,
+      filteredClasses: filterClasses(this.data.classes, "")
+    });
+  },
+
+  onClassSearchInput(e) {
+    const value = e.detail.value;
+    this.setData({
+      classSearchText: value,
+      classSearchOpen: true,
+      filteredClasses: filterClasses(this.data.classes, value)
+    });
+  },
+
+  selectClassFromSearch(e) {
+    const key = e.currentTarget.dataset.key;
+    const index = this.data.classes.findIndex((item) => item.key === key);
+    const selected = this.data.classes[index];
+    if (!selected) return;
+    this.switchClass(selected, index);
+  },
+
+  closeClassSearch() {
+    this.setData({
+      classSearchOpen: false,
+      classSearchText: this.data.selectedClassLabel
+    });
+  },
+
   switchClass(selected, index) {
-    if (!selected || selected.key === this.data.selectedClassKey) return;
+    if (!selected) return;
+    const sameClass = selected.key === this.data.selectedClassKey;
+    if (sameClass) {
+      this.setData({
+        selectedClassIndex: index,
+        classSearchOpen: false,
+        classSearchText: selected.label
+      });
+      return;
+    }
     this.cleanupEmptyShoppingEditors(false);
     this.flushAutoSaves();
     this.autoSaveTimers = {};
@@ -206,8 +273,10 @@ Page({
       selectedGrade: selected.grade,
       selectedClassNo: selected.class_no,
       selectedClassLabel: selected.label,
+      classSearchText: selected.label,
+      filteredClasses: filterClasses(this.data.classes, ""),
+      classSearchOpen: false,
       autoSaveText: "",
-      showMoreActions: false
     }, () => this.loadAttendance());
   },
 
@@ -219,17 +288,12 @@ Page({
 
   showRoster() {
     this.cleanupEmptyShoppingEditors(false);
-    this.setData({ viewMode: "roster" });
+    this.setData({ viewMode: "roster", classSearchOpen: false });
   },
 
   showAbsent() {
     this.cleanupEmptyShoppingEditors(false);
-    this.setData({ viewMode: "absent" });
-  },
-
-  toggleMoreActions() {
-    this.cleanupEmptyShoppingEditors(false);
-    this.setData({ showMoreActions: !this.data.showMoreActions });
+    this.setData({ viewMode: "absent", classSearchOpen: false });
   },
 
   goAdmin() {
