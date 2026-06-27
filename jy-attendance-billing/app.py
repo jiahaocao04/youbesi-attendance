@@ -42,6 +42,10 @@ def now_text() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def minute_text(value: Any) -> str:
+    return str(value or "")[:16]
+
+
 def today_text() -> str:
     return date.today().isoformat()
 
@@ -1117,6 +1121,92 @@ def list_costs(params: dict[str, list[str]]) -> dict[str, Any]:
     return {"summary": summary, "rows": rows}
 
 
+def attendance_status_label(value: str) -> str:
+    return {
+        "present": "到",
+        "leave": "请假",
+        "absent": "未到",
+        "unmarked": "未点",
+    }.get(value or "", value or "")
+
+
+def list_admin_trace(params: dict[str, list[str]]) -> dict[str, Any]:
+    trace_date = require_date((params.get("date") or [today_text()])[0].strip() or today_text())
+    q = (params.get("q") or [""])[0].strip()
+    grade = (params.get("grade") or [""])[0].strip()
+    class_no = (params.get("class_no") or [""])[0].strip()
+
+    where = [
+        "s.status != '停用'",
+        "(a.id IS NOT NULL OR p.id IS NOT NULL)",
+    ]
+    args: list[Any] = [trace_date, trace_date]
+    if grade and grade != "__all__":
+        where.append("s.grade = ?")
+        args.append(grade)
+    if class_no and class_no != "__all__":
+        where.append("s.class_no = ?")
+        args.append(class_no)
+    if q:
+        like = f"%{q}%"
+        where.append("(s.name LIKE ? OR s.permanent_id LIKE ? OR s.annual_id LIKE ?)")
+        args.extend([like, like, like])
+
+    with db_conn() as db:
+        rows = db.execute(
+            f"""
+            SELECT
+                s.permanent_id,
+                s.annual_id,
+                s.name,
+                s.grade,
+                s.class_no,
+                s.seq_in_class,
+                a.id AS attendance_id,
+                a.attendance_date,
+                COALESCE(a.lunch_status, '') AS lunch_status,
+                COALESCE(a.care_status, '') AS care_status,
+                COALESCE(a.bed_status, '') AS bed_status,
+                COALESCE(a.event_mark, 0) AS event_mark,
+                COALESCE(a.note, '') AS note,
+                COALESCE(a.operator, '') AS attendance_operator,
+                COALESCE(a.updated_at, '') AS attendance_updated_at,
+                p.id AS purchase_id,
+                p.purchase_date,
+                COALESCE(p.item, '') AS shopping_item,
+                COALESCE(p.amount, 0) AS shopping_amount,
+                COALESCE(p.operator, '') AS shopping_operator,
+                COALESCE(p.updated_at, '') AS shopping_updated_at
+            FROM students s
+            LEFT JOIN attendance a
+                ON a.permanent_id = s.permanent_id
+                AND a.attendance_date = ?
+            LEFT JOIN student_purchases p
+                ON p.permanent_id = s.permanent_id
+                AND p.purchase_date = ?
+            WHERE {" AND ".join(where)}
+            ORDER BY CAST(s.grade AS INTEGER), CAST(s.class_no AS INTEGER), s.seq_in_class, s.name
+            """,
+            args,
+        ).fetchall()
+
+    for row in rows:
+        row["date"] = row.get("attendance_date") or row.get("purchase_date") or trace_date
+        row["has_attendance"] = bool(row.get("attendance_id"))
+        row["has_shopping"] = bool(row.get("purchase_id"))
+        row["attendance_time"] = minute_text(row.get("attendance_updated_at"))
+        row["shopping_time"] = minute_text(row.get("shopping_updated_at"))
+        row["shopping_amount"] = round_money(row.get("shopping_amount"))
+        if row["has_attendance"]:
+            row["attendance_summary"] = (
+                f"A {attendance_status_label(row.get('lunch_status'))} / "
+                f"P {attendance_status_label(row.get('care_status'))}"
+            )
+        else:
+            row["attendance_summary"] = ""
+    return {"date": trace_date, "rows": rows}
+
+
 def previous_balance_map(db: sqlite3.Connection, month: str) -> dict[str, float]:
     rows = db.execute(
         """
@@ -2082,6 +2172,9 @@ class AppHandler(BaseHTTPRequestHandler):
             elif path == "/api/costs":
                 require_admin(self.current_user())
                 self.send_json({"ok": True, **list_costs(params)})
+            elif path == "/api/admin/trace":
+                require_admin(self.current_user())
+                self.send_json({"ok": True, **list_admin_trace(params)})
             elif path == "/api/dashboard":
                 require_admin(self.current_user())
                 month = (params.get("month") or [today_text()[:7]])[0]

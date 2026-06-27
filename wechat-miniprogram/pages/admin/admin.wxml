@@ -148,6 +148,43 @@
     </view>
   </view>
 
+  <view wx:if="{{active === 'trace'}}" class="section">
+    <view class="card">
+      <text class="card-title">记录追溯</text>
+      <text class="trace-hint">管理员专用：查询某天是谁登记或修改了考勤、事件和购物。</text>
+      <picker mode="date" value="{{traceDate}}" bindchange="onTraceDate"><view class="field">日期：{{traceDate}}</view></picker>
+      <input class="field-input" value="{{traceQuery}}" placeholder="姓名 / 学生编号" bindinput="onTraceQuery" />
+      <view class="trace-filter-grid">
+        <input class="field-input" value="{{traceGrade}}" placeholder="年级" bindinput="onTraceGrade" />
+        <input class="field-input" value="{{traceClassNo}}" placeholder="班级" bindinput="onTraceClassNo" />
+      </view>
+      <view class="primary-action" bindtap="loadTrace">查询记录</view>
+    </view>
+    <view class="trace-list">
+      <view wx:if="{{!traceRows.length}}" class="no-class">暂无记录</view>
+      <view wx:for="{{traceRows}}" wx:key="permanent_id" class="trace-row">
+        <view class="trace-row-head">
+          <view>
+            <text class="row-title">{{item.name}}</text>
+            <text class="row-sub">{{item.grade}}-{{item.class_no}}　{{item.permanent_id}}</text>
+          </view>
+          <text class="trace-date">{{item.date}}</text>
+        </view>
+        <view wx:if="{{item.has_attendance}}" class="trace-line">
+          <text class="trace-tag">考勤</text>
+          <text class="trace-main">{{item.attendance_summary}}</text>
+        </view>
+        <view wx:if="{{item.has_attendance}}" class="trace-meta">登记：{{item.attendance_operator || '未记录'}}　{{item.attendance_time}}</view>
+        <view wx:if="{{item.note}}" class="trace-note">事件：{{item.note}}</view>
+        <view wx:if="{{item.has_shopping}}" class="trace-line shopping">
+          <text class="trace-tag">购物</text>
+          <text class="trace-main">{{item.shopping_item}}　¥{{item.shopping_amount}}</text>
+        </view>
+        <view wx:if="{{item.has_shopping}}" class="trace-meta">登记：{{item.shopping_operator || '未记录'}}　{{item.shopping_time}}</view>
+      </view>
+    </view>
+  </view>
+
   <view wx:if="{{active === 'users'}}" class="section">
     <view class="card">
       <text class="card-title">账户管理</text>

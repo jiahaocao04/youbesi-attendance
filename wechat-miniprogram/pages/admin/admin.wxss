@@ -400,6 +400,99 @@ text {
   color: #1d4ed8;
 }
 
+.trace-hint {
+  display: block;
+  margin-bottom: 10rpx;
+  color: #64748b;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.trace-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10rpx;
+}
+
+.trace-list {
+  margin-top: 12rpx;
+}
+
+.trace-row {
+  margin-bottom: 12rpx;
+  padding: 16rpx;
+  border: 1rpx solid #e2e8f0;
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12rpx 28rpx rgba(15, 23, 42, 0.06);
+}
+
+.trace-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-bottom: 10rpx;
+}
+
+.trace-date {
+  flex: none;
+  padding: 6rpx 10rpx;
+  border-radius: 999rpx;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 19rpx;
+  font-weight: 900;
+}
+
+.trace-line {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-height: 44rpx;
+  margin-top: 8rpx;
+}
+
+.trace-line.shopping .trace-tag {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.trace-tag {
+  flex: none;
+  width: 72rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  border-radius: 999rpx;
+  background: #ecfdf5;
+  color: #16a34a;
+  text-align: center;
+  font-size: 20rpx;
+  font-weight: 900;
+}
+
+.trace-main {
+  min-width: 0;
+  color: #0f172a;
+  font-size: 23rpx;
+  font-weight: 900;
+}
+
+.trace-meta,
+.trace-note {
+  margin-top: 4rpx;
+  padding-left: 82rpx;
+  color: #64748b;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.trace-note {
+  color: #dc2626;
+}
+
 .no-class {
   padding: 28rpx 0;
   color: #94a3b8;

@@ -50,6 +50,7 @@ Page({
       { key: "settlement", label: "月结" },
       { key: "costs", label: "成本" },
       { key: "reports", label: "报表" },
+      { key: "trace", label: "追溯" },
       { key: "users", label: "账户" }
     ],
     dashboard: {},
@@ -97,7 +98,12 @@ Page({
     reportStudent: null,
     reportStudentSearchText: "",
     reportStudentOpen: false,
-    filteredReportStudents: []
+    filteredReportStudents: [],
+    traceDate: today(),
+    traceQuery: "",
+    traceGrade: "",
+    traceClassNo: "",
+    traceRows: []
   },
 
   onLoad() {
@@ -120,7 +126,10 @@ Page({
   },
 
   switchSection(e) {
-    this.setData({ active: e.currentTarget.dataset.key });
+    const key = e.currentTarget.dataset.key;
+    this.setData({ active: key }, () => {
+      if (key === "trace") this.loadTrace();
+    });
   },
 
   onMonthChange(e) {
@@ -408,6 +417,40 @@ Page({
       reportStudentOpen: false,
       reportStudentSearchText: this.data.reportStudent ? this.data.reportStudent.name : ""
     });
+  },
+
+  onTraceDate(e) {
+    this.setData({ traceDate: e.detail.value }, () => this.loadTrace());
+  },
+
+  onTraceQuery(e) {
+    this.setData({ traceQuery: e.detail.value });
+  },
+
+  onTraceGrade(e) {
+    this.setData({ traceGrade: e.detail.value });
+  },
+
+  onTraceClassNo(e) {
+    this.setData({ traceClassNo: e.detail.value });
+  },
+
+  async loadTrace() {
+    this.setData({ loading: true });
+    try {
+      const params = [
+        `date=${encodeURIComponent(this.data.traceDate || today())}`,
+        `q=${encodeURIComponent(this.data.traceQuery || "")}`,
+        `grade=${encodeURIComponent(this.data.traceGrade || "")}`,
+        `class_no=${encodeURIComponent(this.data.traceClassNo || "")}`
+      ].join("&");
+      const data = await request(`/api/admin/trace?${params}`);
+      this.setData({ traceRows: data.rows || [] });
+    } catch (err) {
+      wx.showToast({ title: err.message || "追溯查询失败", icon: "none" });
+    } finally {
+      this.setData({ loading: false });
+    }
   },
 
   onUserField(e) {
