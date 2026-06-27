@@ -75,18 +75,18 @@
         </view>
 
         <view class="ap-col ap-cell">
-          <button
+          <view
             class="ap-btn {{item.lunch_status === 'present' ? 'active' : ''}}"
             data-index="{{index}}"
             data-field="lunch_status"
             bindtap="toggleAP"
-          >A</button>
-          <button
+          >A</view>
+          <view
             class="ap-btn {{item.care_status === 'present' ? 'active' : ''}}"
             data-index="{{index}}"
             data-field="care_status"
             bindtap="toggleAP"
-          >P</button>
+          >P</view>
         </view>
       </view>
 
